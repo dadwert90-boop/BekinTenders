@@ -91,9 +91,9 @@ def make_engine():
         return create_engine(
             database_url,
             pool_pre_ping=True,
-            pool_size=1,
-            max_overflow=0,
-            pool_timeout=10,
+            pool_size=5,
+            max_overflow=5,
+            pool_timeout=30,
             connect_args={
                 "options": "-c search_path=tenders,public",
                 "sslmode": "require",
@@ -120,9 +120,9 @@ def make_engine():
     return create_engine(
         url,
         pool_pre_ping=True,
-        pool_size=1,
-        max_overflow=0,
-        pool_timeout=10,
+        pool_size=5,
+        max_overflow=5,
+        pool_timeout=30,
         connect_args={
             "options": "-c search_path=tenders,public",
             "sslmode": "require",
