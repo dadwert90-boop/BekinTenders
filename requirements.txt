@@ -3,4 +3,3 @@ gunicorn
 sqlalchemy
 flask-sqlalchemy
 psycopg[binary]
-
