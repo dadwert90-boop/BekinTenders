@@ -89,8 +89,8 @@ def make_engine() -> Engine:
         return create_engine(
             database_url,
             pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=5,
+            pool_size=1,
+            max_overflow=0,
             pool_timeout=30,
             connect_args=connect_args,
             future=True,
@@ -304,8 +304,18 @@ def load_filter_options(db: Session) -> Dict[str, List[Dict[str, Any]]]:
     return options
 
 
+_SessionLocal = None
+
 def get_session() -> Session:
-    return SessionLocal(bind=get_engine())
+    global _SessionLocal
+    if _SessionLocal is None:
+        _SessionLocal = sessionmaker(
+            bind=get_engine(),
+            autoflush=False,
+            future=True,
+        )
+    return _SessionLocal()
+
 
 
 def ensure_role(db: Session, name: str) -> int:
