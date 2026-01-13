@@ -102,11 +102,13 @@ def make_engine():
             future=True,
         )
 
-    host = os.environ.get("DB_HOST", "localhost")
+    host = os.environ.get("DB_HOST")
     port = os.environ.get("DB_PORT", "5432")
     dbname = os.environ.get("DB_NAME", "BekinTenders")
-    user = os.environ.get("DB_USER", "postgres")
+    user = os.environ.get("DB_USER")
     password = os.environ.get("DB_PASSWORD", "")
+    if not host or not user:
+        raise RuntimeError("DB_HOST and DB_USER must be set")
     if password == "":
         password = None
     url = URL.create(
