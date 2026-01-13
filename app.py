@@ -90,8 +90,15 @@ def make_engine():
     if database_url:
         return create_engine(
             database_url,
-            connect_args={"options": "-c search_path=tenders,public", "sslmode": "require"},
             pool_pre_ping=True,
+            pool_size=1,
+            max_overflow=0,
+            pool_timeout=10,
+            connect_args={
+                "options": "-c search_path=tenders,public",
+                "sslmode": "require",
+                "prepare_threshold": None,
+            },
             future=True,
         )
 
@@ -112,8 +119,15 @@ def make_engine():
     )
     return create_engine(
         url,
-        connect_args={"options": "-c search_path=tenders,public", "sslmode": "require"},
         pool_pre_ping=True,
+        pool_size=1,
+        max_overflow=0,
+        pool_timeout=10,
+        connect_args={
+            "options": "-c search_path=tenders,public",
+            "sslmode": "require",
+            "prepare_threshold": None,
+        },
         future=True,
     )
 
@@ -610,7 +624,8 @@ def _ensure_email_worker_running() -> None:
 if hasattr(app, "before_first_request"):
     @app.before_first_request
     def _start_email_worker() -> None:
-        _ensure_email_worker_running()
+        if os.getenv("ENABLE_WORKER") == "true":
+            _ensure_email_worker_running()
 
 
 def ensure_admin_user(db: Session):
