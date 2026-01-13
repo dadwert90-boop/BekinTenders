@@ -33,7 +33,7 @@ from sqlalchemy import (
     MetaData,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import Engine, URL
 from sqlalchemy.orm import Session, declarative_base, relationship, selectinload, sessionmaker
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -85,8 +85,14 @@ EMAIL_RETRY_DELAY_SECONDS = int(os.environ.get("EMAIL_RETRY_DELAY_SECONDS", "30"
 EMAIL_RETRY_MAX_MULTIPLIER = int(os.environ.get("EMAIL_RETRY_MAX_MULTIPLIER", "5"))
 
 
-def make_engine():
+def make_engine() -> Engine:
     database_url = os.environ.get("DATABASE_URL")
+    connect_args = {
+        "options": "-c search_path=tenders,public",
+        "sslmode": "require",
+        "prepare_threshold": None,
+    }
+
     if database_url:
         return create_engine(
             database_url,
@@ -94,23 +100,18 @@ def make_engine():
             pool_size=5,
             max_overflow=5,
             pool_timeout=30,
-            connect_args={
-                "options": "-c search_path=tenders,public",
-                "sslmode": "require",
-                "prepare_threshold": None,
-            },
+            connect_args=connect_args,
             future=True,
         )
 
     host = os.environ.get("DB_HOST")
-    port = os.environ.get("DB_PORT", "5432")
-    dbname = os.environ.get("DB_NAME", "BekinTenders")
+    port = os.environ.get("DB_PORT")
+    dbname = os.environ.get("DB_NAME")
     user = os.environ.get("DB_USER")
-    password = os.environ.get("DB_PASSWORD", "")
-    if not host or not user:
-        raise RuntimeError("DB_HOST and DB_USER must be set")
-    if password == "":
-        password = None
+    password = os.environ.get("DB_PASSWORD")
+    if not host or not port or not dbname or not user or password is None:
+        raise RuntimeError("DB_HOST, DB_PORT, DB_NAME, DB_USER, and DB_PASSWORD must be set")
+
     url = URL.create(
         drivername="postgresql+psycopg",
         username=user,
@@ -125,19 +126,22 @@ def make_engine():
         pool_size=5,
         max_overflow=5,
         pool_timeout=30,
-        connect_args={
-            "options": "-c search_path=tenders,public",
-            "sslmode": "require",
-            "prepare_threshold": None,
-        },
+        connect_args=connect_args,
         future=True,
     )
 
 
-engine = make_engine()
+_engine: Optional[Engine] = None
 
 
-@event.listens_for(engine, "connect")
+def get_engine() -> Engine:
+    global _engine
+    if _engine is None:
+        _engine = make_engine()
+    return _engine
+
+
+@event.listens_for(Engine, "connect")
 def _set_search_path(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("SET search_path TO tenders,public")
@@ -148,7 +152,7 @@ def _set_search_path(dbapi_connection, connection_record):
 def _set_search_path_per_transaction(session, transaction, connection):
     connection.exec_driver_sql("SET search_path TO tenders,public")
 
-SessionLocal = sessionmaker(bind=engine, autoflush=False, future=True)
+SessionLocal = sessionmaker(autoflush=False, future=True)
 Base = declarative_base(metadata=MetaData(schema="tenders"))
 
 
@@ -283,7 +287,7 @@ class EmailJob(Base):
 
 
 if os.environ.get("AUTO_CREATE_SCHEMA") == "1":
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=get_engine())
 
 
 def load_filter_options(db: Session) -> Dict[str, List[Dict[str, Any]]]:
@@ -311,6 +315,10 @@ def load_filter_options(db: Session) -> Dict[str, List[Dict[str, Any]]]:
         ],
     }
     return options
+
+
+def get_session() -> Session:
+    return SessionLocal(bind=get_engine())
 
 
 def ensure_role(db: Session, name: str) -> int:
@@ -601,7 +609,7 @@ def _process_email_job(db: Session, job: EmailJob) -> None:
 
 
 def _run_email_worker_cycle() -> None:
-    with SessionLocal() as db:
+    with get_session() as db:
         jobs = _fetch_pending_email_jobs(db)
         for job in jobs:
             _process_email_job(db, job)
@@ -748,7 +756,7 @@ def search():
     tender_type_id = request.args.get("tender_type") or None
     run = request.args.get("run") == "1"
 
-    with SessionLocal() as db:
+    with get_session() as db:
         options = load_filter_options(db)
         tenders = (
             fetch_tenders(
@@ -821,7 +829,7 @@ def apply():
 def admin_login():
     error = None
     next_url = request.args.get("next") or request.form.get("next") or url_for("admin_index")
-    with SessionLocal() as db:
+    with get_session() as db:
         ensure_admin_user(db)
         db.commit()
         if request.method == "POST":
@@ -888,7 +896,7 @@ def subscribe():
     selected_industry_ids: List[int] = normalize_ids(selected_industries)
     total_amount = 100 * (len(selected_category_ids) + len(selected_industry_ids))
 
-    with SessionLocal() as db:
+    with get_session() as db:
         options = load_filter_options(db)
         if request.method == "POST" and form_values["email"]:
             role_id = ensure_role(db, "Tender User")
@@ -958,7 +966,7 @@ def payfast_notify():
 
 @app.route("/tenders/<tender_id>")
 def tender_detail(tender_id: str):
-    with SessionLocal() as db:
+    with get_session() as db:
         tender = fetch_tender_detail(db, tender_id)
     if not tender:
         abort(404)
@@ -1042,7 +1050,7 @@ def admin_index():
     tender_type_id = request.args.get("tender_type") or None
     run = request.args.get("run") == "1"
 
-    with SessionLocal() as db:
+    with get_session() as db:
         options = load_filter_options(db)
         tenders = (
             fetch_tenders(
@@ -1075,12 +1083,12 @@ def admin_index():
 def admin_new_tender():
     if request.method == "POST":
         form = request.form
-        with SessionLocal() as db:
+        with get_session() as db:
             tid = upsert_tender(db, None, form)
             db.commit()
         return redirect(url_for("admin_index", run=1))
 
-    with SessionLocal() as db:
+    with get_session() as db:
         options = load_filter_options(db)
     return render_template("admin_form.html", tender=None, options=options, action="New")
 
@@ -1088,7 +1096,7 @@ def admin_new_tender():
 @app.route("/admin/tenders/<tender_id>/edit", methods=["GET", "POST"])
 @admin_required
 def admin_edit_tender(tender_id: str):
-    with SessionLocal() as db:
+    with get_session() as db:
         if request.method == "POST":
             form = request.form
             upsert_tender(db, tender_id, form)
@@ -1104,7 +1112,7 @@ def admin_edit_tender(tender_id: str):
 @app.route("/admin/tenders/<tender_id>/delete", methods=["POST"])
 @admin_required
 def admin_delete_tender(tender_id: str):
-    with SessionLocal() as db:
+    with get_session() as db:
         delete_tender(db, tender_id)
         db.commit()
     return redirect(url_for("admin_index", run=1))
