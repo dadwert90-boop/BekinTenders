@@ -2,4 +2,4 @@ flask
 gunicorn
 sqlalchemy
 flask-sqlalchemy
-psycopg2-binary
+psycopg[binary]
