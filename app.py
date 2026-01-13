@@ -624,8 +624,7 @@ def _ensure_email_worker_running() -> None:
 if hasattr(app, "before_first_request"):
     @app.before_first_request
     def _start_email_worker() -> None:
-        if os.getenv("ENABLE_WORKER") == "true":
-            _ensure_email_worker_running()
+        return None
 
 
 def ensure_admin_user(db: Session):
@@ -1124,4 +1123,7 @@ def datetime_fmt(value):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    if os.getenv("ENABLE_WORKER") == "true":
+        _email_worker_loop()
+    else:
+        app.run(debug=True)
