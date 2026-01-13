@@ -611,8 +611,6 @@ if hasattr(app, "before_first_request"):
     @app.before_first_request
     def _start_email_worker() -> None:
         _ensure_email_worker_running()
-else:
-    _ensure_email_worker_running()
 
 
 def ensure_admin_user(db: Session):
