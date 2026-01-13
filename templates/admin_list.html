@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Admin · Tenders{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+  <h1>Admin · Tenders</h1>
+  <a class="search-cta" href="{{ url_for('admin_new_tender') }}">New Tender</a>
+</div>
+
+<section class="filter-bar">
+  <form method="get" class="filters filters-inline">
+    <input type="hidden" name="run" value="1">
+    <label>
+      <span>Search</span>
+      <input type="text" name="q" value="{{ q }}" placeholder="Search by keyword, ref, or location">
+    </label>
+    <label>
+      <span>Region</span>
+      <select name="province">
+        <option value="">All Regions</option>
+        {% for p in options.provinces %}
+          <option value="{{ p.id }}" {% if province_id == p.id|string %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Category</span>
+      <select name="category">
+        <option value="">All Categories</option>
+        {% for c in options.categories %}
+          <option value="{{ c.id }}" {% if category_id == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Industry</span>
+      <select name="industry">
+        <option value="">All Industries</option>
+        {% for i in options.industries %}
+          <option value="{{ i.id }}" {% if industry_id == i.id|string %}selected{% endif %}>{{ i.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Type</span>
+      <select name="tender_type">
+        <option value="">All Types</option>
+        {% for t in options.tender_types %}
+          <option value="{{ t.id }}" {% if tender_type_id == t.id|string %}selected{% endif %}>{{ t.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="actions actions-inline">
+      <button type="submit" class="search-cta">Search</button>
+      <a class="ghost" href="{{ url_for('admin_index') }}">Reset</a>
+    </div>
+  </form>
+</section>
+
+{% if show_results %}
+<section class="results">
+  <div class="results-head">
+    <h2>Results</h2>
+    <p>{{ tenders|length }} tenders</p>
+  </div>
+  <div class="card table-card">
+    <div class="table">
+      <div class="table-row table-head">
+        <div>Ref</div>
+        <div>Description</div>
+        <div>Province</div>
+        <div>Type</div>
+        <div>Closing</div>
+        <div class="tight">Actions</div>
+      </div>
+      {% for t in tenders %}
+      <div class="table-row">
+        <div class="tight">{{ t.tender_ref }}</div>
+        <div class="wrap">{{ t.tender_description }}</div>
+        <div>{{ t.province or '—' }}</div>
+        <div>{{ t.tender_type or '—' }}</div>
+        <div class="tight">{{ t.closing_date|date_fmt }}</div>
+        <div class="admin-actions tight">
+          <a href="{{ url_for('admin_edit_tender', tender_id=t.tender_id) }}">Edit</a>
+          <form action="{{ url_for('admin_delete_tender', tender_id=t.tender_id) }}" method="post" onsubmit="return confirm('Delete this tender?');">
+            <button type="submit" class="link danger">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      {% if not tenders %}
+        <div class="table-row empty">No results match your filters.</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

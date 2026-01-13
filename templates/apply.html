@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Apply for Services{% endblock %}
+
+{% block content %}
+<section class="apply-page">
+  <div class="page-heading">
+    <p class="eyebrow">Service Application</p>
+    <h1>Tell us how we can help you win</h1>
+    <p class="lede">Pick the package that suits you, share your contact details, and optionally attach a tender reference.</p>
+  </div>
+
+  <div class="card apply-card">
+    {% if submitted %}
+      <div class="alert success">
+        <h2>Got it!</h2>
+        <p>We will be in touch about <strong>{{ selected_service.label }}</strong>. Expect a follow-up on {{ form_values.email or form_values.phone or "your preferred contact" }}.</p>
+      </div>
+    {% endif %}
+
+    <form method="post" class="apply-form">
+      <div class="radio-grid">
+        {% for service in services %}
+          <label class="radio-card">
+            <input
+              type="radio"
+              name="service"
+              value="{{ service.slug }}"
+              {% if selected_slug == service.slug %}checked{% endif %}
+              required
+            >
+            <div class="radio-content">
+              <div class="radio-top">
+                <span class="step-pill">Step {{ service.step }}</span>
+                <span class="radio-price">R{{ service.price }}</span>
+              </div>
+              <h3>{{ service.label }}</h3>
+              <p>{{ service.description }}</p>
+            </div>
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="form-grid">
+        <label>
+          <span>Full Name</span>
+          <input type="text" name="full_name" value="{{ form_values.full_name }}" required>
+        </label>
+        <label>
+          <span>Email</span>
+          <input type="email" name="email" value="{{ form_values.email }}" required>
+        </label>
+        <label>
+          <span>Phone</span>
+          <input type="tel" name="phone" value="{{ form_values.phone }}" required>
+        </label>
+        <label>
+          <span>Company</span>
+          <input type="text" name="company" value="{{ form_values.company }}">
+        </label>
+      </div>
+
+      <div class="optional">
+        <h4>Tender details (optional)</h4>
+        <label>
+          <span>Tender Reference</span>
+          <input type="text" name="tender_ref" value="{{ form_values.tender_ref }}">
+        </label>
+        <label>
+          <span>Notes / description</span>
+          <textarea name="tender_description" rows="3">{{ form_values.tender_description }}</textarea>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="submit-btn">Submit</button>
+        <a class="cancel-btn" href="{{ url_for('search') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

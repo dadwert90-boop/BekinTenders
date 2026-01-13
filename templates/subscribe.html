@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Subscribe{% endblock %}
+
+{% block content %}
+<section class="subscribe-page">
+  <div class="page-heading">
+    <p class="eyebrow">Weekly Tender Alerts</p>
+    <h1>Tell us what opportunities you need.</h1>
+    <p class="lede">Receive a curated list of tenders by email. You can narrow the alerts by category and industry, and update your preferences anytime.</p>
+  </div>
+
+  <div class="card subscribe-card">
+    {% if submitted %}
+      <div class="alert success">
+        <h2>Thanks {{ form_values.full_name or "there" }}!</h2>
+        <p>
+          We will send tailored alerts to <strong>{{ form_values.email or "your inbox" }}</strong>.
+          {% if selected_category_names %}
+            Categories: {{ selected_category_names|join(", ") }}.
+          {% endif %}
+          {% if selected_industry_names %}
+            Industries: {{ selected_industry_names|join(", ") }}.
+          {% endif %}
+        </p>
+        <p>Expect the next update in your inbox shortly.</p>
+      </div>
+    {% endif %}
+
+    {% if payment_error %}
+      <div class="alert warning">
+        <strong>Payment setup failed:</strong> {{ payment_error }}
+      </div>
+    {% endif %}
+
+    <div class="calculator-panel" aria-live="polite">
+      <div>
+        <p class="eyebrow">Instant Quote</p>
+        <p class="calculator-label">Selected industries + categories</p>
+      </div>
+      <div class="calculator-amount">
+        R<span id="calculator-total">0</span>
+      </div>
+      <p class="calculator-note">Each selected industry or category adds R100 to your total.</p>
+    </div>
+
+    <form method="post" class="subscribe-form">
+      <div class="form-row">
+        <label>
+          <span>Full Name</span>
+          <input type="text" name="full_name" value="{{ form_values.full_name }}" placeholder="Jane Doe" required>
+        </label>
+        <label>
+          <span>Company</span>
+          <input type="text" name="company" value="{{ form_values.company }}" placeholder="Your Business Name">
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label>
+          <span>Email</span>
+          <input type="email" name="email" value="{{ form_values.email }}" placeholder="you@example.com" required>
+        </label>
+        <label>
+          <span>Phone</span>
+          <input type="tel" name="phone" value="{{ form_values.phone }}" placeholder="+27 11 123 4567">
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label>
+          <span>Tender Categories</span>
+          <p class="hint">Select all categories that interest you.</p>
+          <div class="multi-checkboxes">
+            {% for category in options.categories %}
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  name="categories"
+                  value="{{ category.id }}"
+                  {% if category.id|string in selected_categories %}checked{% endif %}
+                >
+                <span>{{ category.name }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </label>
+        <label>
+          <span>Industries</span>
+          <p class="hint">Pick every industry you cover.</p>
+          <div class="multi-checkboxes">
+            {% for industry in options.industries %}
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  name="industries"
+                  value="{{ industry.id }}"
+                  {% if industry.id|string in selected_industries %}checked{% endif %}
+                >
+                <span>{{ industry.name }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </label>
+      </div>
+
+      <label>
+        <span>Notes (optional)</span>
+        <textarea name="notes" rows="3" placeholder="Tell us about your business or the region you serve.">{{ form_values.notes }}</textarea>
+      </label>
+
+      <div class="actions">
+        <button type="submit" class="subscribe-btn">Subscribe</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<script>
+  (function () {
+    function updateTotal() {
+      const categoryCount = document.querySelectorAll('input[name="categories"]:checked').length;
+      const industryCount = document.querySelectorAll('input[name="industries"]:checked').length;
+      const total = (categoryCount + industryCount) * 100;
+      const totalEl = document.getElementById("calculator-total");
+      if (totalEl) {
+        totalEl.textContent = total.toLocaleString("en-ZA");
+      }
+    }
+
+    document.querySelectorAll('input[name="categories"], input[name="industries"]').forEach(function (input) {
+      input.addEventListener("change", updateTotal);
+    });
+
+    document.addEventListener("DOMContentLoaded", updateTotal);
+  })();
+</script>
+{% endblock %}

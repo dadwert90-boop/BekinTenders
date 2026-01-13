@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Search Tenders{% endblock %}
+
+{% block content %}
+<section class="hero split">
+  <div class="hero-text">
+    <p class="eyebrow">South Africa · Public Tenders</p>
+    <h1>Looking for Tenders?<br>Let them find you.</h1>
+    <p class="lede">Search the BekinTenders feed by keyword, region, and category. Subscribe to updates and never miss a closing date.</p>
+  </div>
+    <div class="hero-visual">
+      <div class="subscribe-panel">
+      <a class="subscribe-btn" href="{{ url_for('subscribe') }}">Subscribe</a>
+        <p class="subscribe-note">to receive custom tenders weekly</p>
+      </div>
+    </div>
+  </section>
+
+<section class="filter-bar">
+  <form method="get" class="filters filters-inline">
+    <input type="hidden" name="run" value="1">
+    <label>
+      <span>Search</span>
+      <input type="text" name="q" value="{{ q }}" placeholder="Search by keyword, ref, or location">
+    </label>
+    <label>
+      <span>Region</span>
+      <select name="province">
+        <option value="">All Regions</option>
+        {% for p in options.provinces %}
+          <option value="{{ p.id }}" {% if province_id == p.id|string %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Category</span>
+      <select name="category">
+        <option value="">All Categories</option>
+        {% for c in options.categories %}
+          <option value="{{ c.id }}" {% if category_id == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Industry</span>
+      <select name="industry">
+        <option value="">All Industries</option>
+        {% for i in options.industries %}
+          <option value="{{ i.id }}" {% if industry_id == i.id|string %}selected{% endif %}>{{ i.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Type</span>
+      <select name="tender_type">
+        <option value="">All Types</option>
+        {% for t in options.tender_types %}
+          <option value="{{ t.id }}" {% if tender_type_id == t.id|string %}selected{% endif %}>{{ t.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="actions actions-inline">
+      <button type="submit" class="search-cta">Search</button>
+      <a class="ghost" href="{{ url_for('search') }}">Reset</a>
+    </div>
+  </form>
+</section>
+
+{% if show_results %}
+<section class="results">
+  <div class="results-head">
+    <h2>Results</h2>
+    <p>{{ tenders|length }} tenders</p>
+  </div>
+  <div class="card table-card">
+    <div class="table">
+      <div class="table-row table-head">
+        <div>Ref</div>
+        <div>Description</div>
+        <div>Category</div>
+        <div>Province</div>
+        <div>Type</div>
+        <div>Closing</div>
+      </div>
+      {% for t in tenders %}
+      <a class="table-row" href="{{ url_for('tender_detail', tender_id=t.tender_id) }}">
+        <div class="tight">{{ t.tender_ref }}</div>
+        <div class="wrap">{{ t.tender_description }}</div>
+        <div>{{ t.category or '—' }}</div>
+        <div>{{ t.province or '—' }}</div>
+        <div>{{ t.tender_type or '—' }}</div>
+        <div class="tight">{{ t.closing_date|date_fmt }}</div>
+      </a>
+      {% endfor %}
+      {% if not tenders %}
+        <div class="table-row empty">No results match your filters.</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="services">
+  <div class="services-intro">
+    <p>Applying for tenders in South Africa can grow your business across industries like cleaning, security, construction, and IT.</p>
+    <p>To apply for tenders, you'll need to register on the <strong>CSD (Central Supplier Database)</strong>, have a valid <strong>BEE certificate</strong>, and meet tax compliance. We help you navigate the process — from finding tenders to submitting winning bids.</p>
+  </div>
+  <p class="steps-heading">Ready to apply? Follow these steps</p>
+  <div class="service-grid">
+    <div class="service-card">
+      <p class="step-label">Step 1</p>
+      <h3>Tender Review</h3>
+      <div class="price">R250</div>
+      <p>Not sure you meet the requirements? We review your tender and provide a detailed summary with guidance.</p>
+      <a class="service-btn" href="{{ url_for('apply', service='tender-review') }}">Apply Now</a>
+    </div>
+    <div class="service-card">
+      <p class="step-label">Step 2</p>
+      <h3>One-Off Tender Application</h3>
+      <div class="price">R990</div>
+      <p>We handle your tender from start to finish — complete, compliant, and submitted on time.</p>
+      <a class="service-btn" href="{{ url_for('apply', service='one-off') }}">Apply Now</a>
+    </div>
+    <div class="service-card">
+      <p class="step-label">Step 3</p>
+      <h3>Full Tender Training</h3>
+      <div class="price">R690</div>
+      <p>Learn how to apply for tenders with step-by-step, practical training — perfect for new businesses.</p>
+      <a class="service-btn" href="{{ url_for('apply', service='training') }}">Apply Now</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

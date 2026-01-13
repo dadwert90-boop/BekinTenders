@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ action }} Tender{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+  <h1>{{ action }} Tender</h1>
+  <a class="ghost" href="{{ url_for('admin_index', run=1) }}">Back</a>
+</div>
+
+<div class="card">
+  <form method="post" class="admin-form">
+    <div class="form-grid">
+      <label>
+        <span>Reference *</span>
+        <input type="text" name="tender_ref" value="{{ tender.tender_ref if tender else '' }}" required>
+      </label>
+      <label>
+        <span>Category</span>
+        <select name="category">
+          <option value="">—</option>
+          {% for c in options.categories %}
+            <option value="{{ c.id }}" {% if tender and tender.tender_category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Industry</span>
+        <select name="industry">
+          <option value="">—</option>
+          {% for i in options.industries %}
+            <option value="{{ i.id }}" {% if tender and tender.industry_id == i.id %}selected{% endif %}>{{ i.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Province</span>
+        <select name="province">
+          <option value="">—</option>
+          {% for p in options.provinces %}
+            <option value="{{ p.id }}" {% if tender and tender.province_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Tender type</span>
+        <select name="tender_type">
+          <option value="">—</option>
+          {% for t in options.tender_types %}
+            <option value="{{ t.id }}" {% if tender and tender.tender_type_id == t.id %}selected{% endif %}>{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Advertised date</span>
+        <input type="date" name="advertised_date" value="{{ tender.advertised_date }}">
+      </label>
+      <label>
+        <span>Closing date</span>
+        <input type="date" name="closing_date" value="{{ tender.closing_date }}">
+      </label>
+      <label>
+        <span>Attachment URL</span>
+        <input type="url" name="attachment_download_url" value="{{ tender.attachment_download_url if tender else '' }}">
+      </label>
+    </div>
+
+    <label>
+      <span>Description *</span>
+      <textarea name="tender_description" rows="4" required>{{ tender.tender_description if tender else '' }}</textarea>
+    </label>
+    <label>
+      <span>Service location</span>
+      <textarea name="service_location" rows="2">{{ tender.service_location if tender else '' }}</textarea>
+    </label>
+    <label>
+      <span>Special conditions</span>
+      <textarea name="special_conditions" rows="2">{{ tender.special_conditions if tender else '' }}</textarea>
+    </label>
+    <div class="form-grid">
+      <label>
+        <span>Contact person</span>
+        <input type="text" name="contact_person" value="{{ tender.contact_person if tender else '' }}">
+      </label>
+      <label>
+        <span>Contact email</span>
+        <input type="email" name="contact_email" value="{{ tender.contact_email if tender else '' }}">
+      </label>
+      <label>
+        <span>Contact telephone</span>
+        <input type="text" name="contact_telephone" value="{{ tender.contact_telephone if tender else '' }}">
+      </label>
+    </div>
+    <label>
+      <span>Review summary</span>
+      <textarea name="tender_review_summary" rows="2">{{ tender.tender_review_summary if tender else '' }}</textarea>
+    </label>
+
+    <div class="actions actions-inline">
+      <button type="submit" class="search-cta">Save</button>
+      <a class="ghost" href="{{ url_for('admin_index', run=1) }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

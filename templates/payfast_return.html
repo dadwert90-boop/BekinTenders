@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Payment Complete{% endblock %}
+
+{% block content %}
+<section class="subscribe-page">
+  <div class="card subscribe-card">
+    <h1>Payment Received</h1>
+    <p>Thanks! We received your PayFast payment and your tender alerts are now active.</p>
+    <p>
+      <a href="{{ url_for('subscribe') }}" class="link-button">Back to subscription</a>
+    </p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Redirecting to PayFast{% endblock %}
+
+{% block content %}
+<section class="subscribe-page">
+  <div class="card subscribe-card">
+    <h1>Redirecting to PayFast</h1>
+    <p>You're being securely redirected to PayFast to complete the R{{ payment_data.display_amount }} payment.</p>
+    <p>If the form does not submit automatically, click below.</p>
+    <form id="payfast-form" action="{{ payment_data.form_action }}" method="post">
+      {% for name, value in payment_data.fields.items() %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}">
+      {% endfor %}
+      <button type="submit" class="payfast-btn">Proceed to PayFast</button>
+    </form>
+  </div>
+</section>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var form = document.getElementById("payfast-form");
+    if (form) {
+      form.submit();
+    }
+  });
+</script>
+{% endblock %}

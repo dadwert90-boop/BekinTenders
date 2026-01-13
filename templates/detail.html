@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Tender {{ tender.tender_ref }}{% endblock %}
+
+{% block content %}
+<div class="apply-banner">
+  <span>Help me</span>
+  <button type="button" class="apply-btn">Apply</button>
+  <span>for this tender</span>
+</div>
+
+<section class="detail-hero">
+  <div>
+    <p class="eyebrow">Tender</p>
+    <h1>{{ tender.tender_ref }}</h1>
+    <p class="lede">{{ tender.tender_description }}</p>
+    <div class="chips">
+      {% if tender.category %}<span class="chip">{{ tender.category.name }}</span>{% endif %}
+      {% if tender.industry %}<span class="chip">{{ tender.industry.name }}</span>{% endif %}
+      {% if tender.province %}<span class="chip">{{ tender.province.name }}</span>{% endif %}
+      {% if tender.tender_type %}<span class="chip">{{ tender.tender_type.code }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="meta-card">
+    <dl>
+      <div><dt>Advertised</dt><dd>{{ tender.advertised_date|date_fmt }}</dd></div>
+      <div><dt>Closing</dt><dd>{{ tender.closing_date|date_fmt }}</dd></div>
+      <div><dt>Created</dt><dd>{{ tender.created_at|datetime_fmt }}</dd></div>
+      <div><dt>ID</dt><dd class="tight">{{ tender.tender_id }}</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="grid-2 gap">
+  <div class="card">
+    <h3>Details</h3>
+    <dl class="detail-grid">
+      <div><dt>Service location</dt><dd>{{ tender.service_location or '—' }}</dd></div>
+      <div><dt>Special conditions</dt><dd>{{ tender.special_conditions or '—' }}</dd></div>
+      <div><dt>Contact</dt><dd>{{ tender.contact_person or '—' }}</dd></div>
+      <div><dt>Email</dt><dd>{{ tender.contact_email or '—' }}</dd></div>
+      <div><dt>Telephone</dt><dd>{{ tender.contact_telephone or '—' }}</dd></div>
+      <div><dt>Attachments</dt><dd>{{ tender.attachments or '—' }}</dd></div>
+      <div><dt>Attachment URL</dt><dd>{% if tender.attachment_download_url %}<a href="{{ tender.attachment_download_url }}" target="_blank" rel="noopener">Download</a>{% else %}—{% endif %}</dd></div>
+    </dl>
+  </div>
+  <div class="card">
+    <h3>Briefing</h3>
+    <dl class="detail-grid">
+      <div><dt>Scheduled</dt><dd>{{ 'Yes' if tender.briefing and tender.briefing.is_scheduled else 'No' }}</dd></div>
+      <div><dt>Compulsory</dt><dd>{{ 'Yes' if tender.briefing and tender.briefing.is_compulsory else 'No' }}</dd></div>
+      <div><dt>When</dt><dd>{{ tender.briefing.briefing_datetime|datetime_fmt if tender.briefing else '—' }}</dd></div>
+      <div><dt>Venue</dt><dd>{{ tender.briefing.briefing_venue or '—' if tender.briefing else '—' }}</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="card">
+  <h3>Review Summary</h3>
+  <p>{{ tender.tender_review_summary or '—' }}</p>
+</section>
+
+<div class="backlink">
+  <a href="{{ url_for('search') }}">← Back to search</a>
+</div>
+{% endblock %}

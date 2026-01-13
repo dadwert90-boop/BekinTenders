@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Payment Cancelled{% endblock %}
+
+{% block content %}
+<section class="subscribe-page">
+  <div class="card subscribe-card">
+    <h1>Payment Cancelled</h1>
+    <p>Your PayFast payment was cancelled. Update your details or try again when you're ready.</p>
+    <p>
+      <a href="{{ url_for('subscribe') }}" class="link-button">Return to subscribe form</a>
+    </p>
+  </div>
+</section>
+{% endblock %}

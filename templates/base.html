@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Tenders Explorer{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">
+      <span class="mark">BEKIN</span>
+      <span class="word">Tenders</span>
+    </div>
+  <nav class="nav">
+    {% if request.endpoint == "subscribe" %}
+      <a href="{{ url_for('search') }}">Home</a>
+    {% elif request.endpoint and request.endpoint.startswith('admin_') %}
+      <a href="{{ url_for('search') }}">Home</a>
+    {% endif %}
+    {% if session.get("is_admin") %}
+      <a href="{{ url_for('admin_index', run=1) }}">Admin Dashboard</a>
+      <a href="{{ url_for('admin_logout') }}">Log out</a>
+    {% else %}
+      <a href="{{ url_for('admin_login') }}">Admin Login</a>
+    {% endif %}
+  </nav>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div>Live from BekinTenders database</div>
+  </footer>
+
+  <a class="whatsapp-float" href="https://wa.me/27828882923?text=Hi%20BekinTenders%2C%20I%27d%20like%20to%20learn%20more%20about%20your%20tenders%20alerts." target="_blank" rel="noopener">
+    <span aria-hidden="true">💬</span> WhatsApp
+  </a>
+</body>
+</html>
