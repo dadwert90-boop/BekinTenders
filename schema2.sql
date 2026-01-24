@@ -262,6 +262,26 @@ CREATE TABLE IF NOT EXISTS tender_subscription_payments (
 CREATE INDEX IF NOT EXISTS idx_tender_payments_month ON tender_subscription_payments(month_start);
 CREATE INDEX IF NOT EXISTS idx_tender_payments_paid ON tender_subscription_payments(paid);
 
+CREATE TABLE IF NOT EXISTS service_requests (
+    request_id UUID PRIMARY KEY,
+    service_slug TEXT NOT NULL,
+    service_label TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    full_name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT,
+    company TEXT,
+    tender_ref TEXT,
+    tender_description TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    paid_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_service_requests_email ON service_requests(email);
+CREATE INDEX IF NOT EXISTS idx_service_requests_status ON service_requests(status);
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS email_jobs (

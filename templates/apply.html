@@ -16,6 +16,12 @@
         <p>We will be in touch about <strong>{{ selected_service.label }}</strong>. Expect a follow-up on {{ form_values.email or form_values.phone or "your preferred contact" }}.</p>
       </div>
     {% endif %}
+    {% if payment_error %}
+      <div class="alert danger">
+        <h2>Payment error</h2>
+        <p>{{ payment_error }}</p>
+      </div>
+    {% endif %}
 
     <form method="post" class="apply-form">
       <div class="radio-grid">

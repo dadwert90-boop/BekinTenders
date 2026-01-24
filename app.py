@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_ADMIN_EMAIL = os.environ.get("DEFAULT_ADMIN_EMAIL", "admin@admin.com")
 DEFAULT_ADMIN_PASSWORD = os.environ.get("DEFAULT_ADMIN_PASSWORD", "B3kinAdmin!2024")
 DEFAULT_ADMIN_NAME = os.environ.get("DEFAULT_ADMIN_NAME", "Administrator")
+ADMIN_NOTIFY_EMAIL = os.environ.get("ADMIN_NOTIFY_EMAIL", "tenders@bekinconsulting.co.za")
 
 SERVICE_OPTIONS = [
     {
@@ -274,6 +275,24 @@ class TenderSubscriptionPayment(Base):
     user = relationship("User")
 
 
+class ServiceRequest(Base):
+    __tablename__ = "service_requests"
+    request_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    service_slug = Column(Text, nullable=False)
+    service_label = Column(Text, nullable=False)
+    amount = Column(Integer, nullable=False)
+    full_name = Column(Text, nullable=False)
+    email = Column(Text, nullable=False)
+    phone = Column(Text)
+    company = Column(Text)
+    tender_ref = Column(Text)
+    tender_description = Column(Text)
+    status = Column(Text, nullable=False, default="pending")
+    paid_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class EmailJob(Base):
     __tablename__ = "email_jobs"
     job_id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
@@ -456,10 +475,13 @@ def _payfast_api_request(method: str, path: str, body: Optional[Dict[str, Any]] 
 
 def _prepare_payfast_payment(
     total_amount: int,
-    subscription_id: uuid.UUID,
+    payment_id: uuid.UUID,
     payer_email: str,
     payer_name: str,
     url_root: str,
+    item_name: str,
+    item_description: str,
+    custom_str1: str,
 ) -> Dict[str, Any]:
     if total_amount <= 0:
         raise ValueError("Payment amount must be greater than zero")
@@ -480,11 +502,11 @@ def _prepare_payfast_payment(
         "cancel_url": f"{base}/payfast/cancel",
         "notify_url": f"{base}/payfast/notify",
         "email_address": payer_email,
-        "m_payment_id": str(subscription_id),
+        "m_payment_id": str(payment_id),
         "amount": amount_value,
-        "item_name": f"Tender alerts ({payer_email})",
-        "item_description": payer_name or "Tender subscription",
-        "custom_str1": "tender_subscription",
+        "item_name": item_name,
+        "item_description": item_description,
+        "custom_str1": custom_str1,
         "email_confirmation": "1",
     }
     params["timestamp"] = _current_iso_timestamp()
@@ -501,6 +523,32 @@ def _prepare_payfast_payment(
         "fields": params,
     }
 
+
+def _sendgrid_admin_notification(subject: str, html_content: str) -> None:
+    api_key = os.environ.get("SENDGRID_API_KEY")
+    if not api_key:
+        logger.warning("SENDGRID_API_KEY is not set; skipping admin notification email.")
+        return
+
+    sender_email = os.environ.get("SENDGRID_FROM_EMAIL", "tenders@bekinconsulting.co.za")
+    mail_payload = {
+        "personalizations": [{"to": [{"email": ADMIN_NOTIFY_EMAIL}]}],
+        "from": {"email": sender_email},
+        "subject": subject,
+        "content": [{"type": "text/html", "value": html_content}],
+    }
+
+    request = urllib.request.Request(
+        "https://api.sendgrid.com/v3/mail/send",
+        data=json.dumps(mail_payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        if getattr(response, "status", 0) >= 400:
+            raise RuntimeError(f"SendGrid returned status {response.status}")
 
 
 def ensure_admin_user(db: Session):
@@ -653,6 +701,8 @@ def search():
 @app.route("/apply", methods=["GET", "POST"])
 def apply():
     submitted = False
+    payment_data: Optional[Dict[str, Any]] = None
+    payment_error: Optional[str] = None
     form_values = {
         "full_name": "",
         "email": "",
@@ -681,6 +731,37 @@ def apply():
         )
 
     selected_service = next((s for s in SERVICE_OPTIONS if s["slug"] == selected_slug), SERVICE_OPTIONS[0])
+    if request.method == "POST":
+        with get_session() as db:
+            request_record = ServiceRequest(
+                request_id=uuid.uuid4(),
+                service_slug=selected_service["slug"],
+                service_label=selected_service["label"],
+                amount=int(selected_service["price"]),
+                full_name=form_values["full_name"],
+                email=form_values["email"],
+                phone=form_values["phone"] or None,
+                company=form_values["company"] or None,
+                tender_ref=form_values["tender_ref"] or None,
+                tender_description=form_values["tender_description"] or None,
+                status="pending",
+            )
+            db.add(request_record)
+            db.commit()
+            try:
+                payment_data = _prepare_payfast_payment(
+                    request_record.amount,
+                    request_record.request_id,
+                    request_record.email,
+                    request_record.full_name,
+                    request.url_root,
+                    f"{selected_service['label']} (Bekin services)",
+                    selected_service["description"],
+                    "service_apply",
+                )
+                return render_template("payfast_redirect.html", payment_data=payment_data)
+            except Exception as exc:  # pragma: no cover - integration
+                payment_error = str(exc)
     return render_template(
         "apply.html",
         services=SERVICE_OPTIONS,
@@ -688,6 +769,7 @@ def apply():
         selected_service=selected_service,
         submitted=submitted,
         form_values=form_values,
+        payment_error=payment_error,
     )
 
 
@@ -787,6 +869,9 @@ def subscribe():
                         form_values["email"],
                         form_values["full_name"],
                         request.url_root,
+                        f"Tender alerts ({form_values['email']})",
+                        form_values["full_name"] or "Tender subscription",
+                        "tender_subscription",
                     )
                     return render_template("payfast_redirect.html", payment_data=payment_data)
                 except Exception as exc:  # pragma: no cover - integration
@@ -827,6 +912,83 @@ def payfast_cancel():
 def payfast_notify():
     payload = request.form.to_dict()
     app.logger.info("PayFast notification received: %s", payload)
+    payment_status = (payload.get("payment_status") or "").upper()
+    payment_id = payload.get("m_payment_id")
+    flow = payload.get("custom_str1") or ""
+    if payment_status != "COMPLETE":
+        return "", 200
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    if flow == "tender_subscription" and payment_id:
+        try:
+            subscription_id = uuid.UUID(payment_id)
+        except ValueError:
+            return "", 200
+        with get_session() as db:
+            subscription = db.get(TenderSubscription, subscription_id)
+            if not subscription:
+                return "", 200
+            month_start = month_start_today()
+            payment = db.get(TenderSubscriptionPayment, (subscription.user_id, month_start))
+            if payment is None:
+                payment = TenderSubscriptionPayment(
+                    user_id=subscription.user_id,
+                    month_start=month_start,
+                    paid=True,
+                    paid_at=now,
+                )
+                db.add(payment)
+            else:
+                payment.paid = True
+                payment.paid_at = now
+            db.commit()
+        return "", 200
+
+    if flow == "service_apply" and payment_id:
+        try:
+            request_id = uuid.UUID(payment_id)
+        except ValueError:
+            return "", 200
+        details = None
+        with get_session() as db:
+            service_request = db.get(ServiceRequest, request_id)
+            if not service_request:
+                return "", 200
+            service_request.status = "paid"
+            service_request.paid_at = now
+            details = {
+                "service_label": service_request.service_label,
+                "amount": service_request.amount,
+                "full_name": service_request.full_name,
+                "email": service_request.email,
+                "phone": service_request.phone,
+                "company": service_request.company,
+                "tender_ref": service_request.tender_ref,
+                "tender_description": service_request.tender_description,
+            }
+            db.commit()
+        if details:
+            try:
+                html_content = f"""
+                <p>New service payment received.</p>
+                <ul>
+                  <li><strong>Service:</strong> {details['service_label']}</li>
+                  <li><strong>Amount:</strong> R{details['amount']}</li>
+                  <li><strong>Name:</strong> {details['full_name']}</li>
+                  <li><strong>Email:</strong> {details['email']}</li>
+                  <li><strong>Phone:</strong> {details['phone'] or '—'}</li>
+                  <li><strong>Company:</strong> {details['company'] or '—'}</li>
+                  <li><strong>Tender Ref:</strong> {details['tender_ref'] or '—'}</li>
+                  <li><strong>Notes:</strong> {details['tender_description'] or '—'}</li>
+                </ul>
+                """
+                _sendgrid_admin_notification(
+                    subject=f"Service payment: {details['service_label']}",
+                    html_content=html_content,
+                )
+            except Exception as exc:  # pragma: no cover - integration
+                logger.warning("Failed to send service payment email: %s", exc)
     return "", 200
 
 
