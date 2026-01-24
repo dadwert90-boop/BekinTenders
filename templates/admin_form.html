@@ -22,6 +22,7 @@
             <option value="{{ c.id }}" {% if tender and tender.tender_category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
           {% endfor %}
         </select>
+        <input type="text" name="new_category" placeholder="Or add a new category">
       </label>
       <label>
         <span>Industry</span>
@@ -31,6 +32,7 @@
             <option value="{{ i.id }}" {% if tender and tender.industry_id == i.id %}selected{% endif %}>{{ i.name }}</option>
           {% endfor %}
         </select>
+        <input type="text" name="new_industry" placeholder="Or add a new industry">
       </label>
       <label>
         <span>Province</span>

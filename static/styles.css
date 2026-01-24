@@ -190,6 +190,7 @@ button {
   font-size: 15px;
   color: var(--text);
 }
+.admin-form label input + input { margin-top: 8px; }
 .admin-form textarea { resize: vertical; }
 
 .apply-banner {

@@ -867,6 +867,36 @@ def month_start_today() -> datetime.date:
     return datetime.date(today.year, today.month, 1)
 
 
+def ensure_category(db: Session, name: str) -> int:
+    cleaned = name.strip()
+    if not cleaned:
+        raise ValueError("Category name is required")
+    existing = db.scalars(
+        select(TenderCategory).filter(func.lower(TenderCategory.name) == cleaned.lower())
+    ).one_or_none()
+    if existing:
+        return existing.tender_category_id
+    category = TenderCategory(name=cleaned)
+    db.add(category)
+    db.flush()
+    return category.tender_category_id
+
+
+def ensure_industry(db: Session, name: str) -> int:
+    cleaned = name.strip()
+    if not cleaned:
+        raise ValueError("Industry name is required")
+    existing = db.scalars(
+        select(Industry).filter(func.lower(Industry.name) == cleaned.lower())
+    ).one_or_none()
+    if existing:
+        return existing.industry_id
+    industry = Industry(name=cleaned)
+    db.add(industry)
+    db.flush()
+    return industry.industry_id
+
+
 def upsert_tender(db: Session, tender_id: Optional[str], form: Dict[str, Any]) -> str:
     """Insert or update a tender based on tender_id."""
     payload = {
@@ -1195,8 +1225,14 @@ def admin_industry_delete(industry_id: int):
 @admin_required
 def admin_new_tender():
     if request.method == "POST":
-        form = request.form
+        form = request.form.to_dict()
         with get_session() as db:
+            new_category = (form.get("new_category") or "").strip()
+            new_industry = (form.get("new_industry") or "").strip()
+            if new_category:
+                form["category"] = str(ensure_category(db, new_category))
+            if new_industry:
+                form["industry"] = str(ensure_industry(db, new_industry))
             tid = upsert_tender(db, None, form)
             db.commit()
         return redirect(url_for("admin_index", run=1))
@@ -1211,7 +1247,13 @@ def admin_new_tender():
 def admin_edit_tender(tender_id: str):
     with get_session() as db:
         if request.method == "POST":
-            form = request.form
+            form = request.form.to_dict()
+            new_category = (form.get("new_category") or "").strip()
+            new_industry = (form.get("new_industry") or "").strip()
+            if new_category:
+                form["category"] = str(ensure_category(db, new_category))
+            if new_industry:
+                form["industry"] = str(ensure_industry(db, new_industry))
             upsert_tender(db, tender_id, form)
             db.commit()
             return redirect(url_for("admin_index", run=1))
