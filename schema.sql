@@ -249,6 +249,19 @@ CREATE TABLE IF NOT EXISTS tender_subscriptions (
 
 CREATE INDEX IF NOT EXISTS idx_tender_subscriptions_user ON tender_subscriptions(user_id);
 
+CREATE TABLE IF NOT EXISTS tender_subscription_payments (
+    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+    month_start DATE NOT NULL,
+    paid BOOLEAN NOT NULL DEFAULT FALSE,
+    paid_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, month_start)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tender_payments_month ON tender_subscription_payments(month_start);
+CREATE INDEX IF NOT EXISTS idx_tender_payments_paid ON tender_subscription_payments(paid);
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS email_jobs (
@@ -294,6 +307,10 @@ BEGIN
         SELECT DISTINCT u.email
         FROM tender_subscriptions ts
         JOIN users u ON ts.user_id = u.user_id
+        JOIN tender_subscription_payments tsp
+          ON tsp.user_id = u.user_id
+         AND tsp.month_start = date_trunc('month', now())::date
+         AND tsp.paid = TRUE
         WHERE NEW.tender_category_id IS NOT NULL
           AND ts.selected_category_ids IS NOT NULL
           AND ts.selected_category_ids @> ARRAY[NEW.tender_category_id]
@@ -301,6 +318,10 @@ BEGIN
         SELECT DISTINCT u.email
         FROM tender_subscriptions ts
         JOIN users u ON ts.user_id = u.user_id
+        JOIN tender_subscription_payments tsp
+          ON tsp.user_id = u.user_id
+         AND tsp.month_start = date_trunc('month', now())::date
+         AND tsp.paid = TRUE
         WHERE NEW.industry_id IS NOT NULL
           AND ts.selected_industry_ids IS NOT NULL
           AND ts.selected_industry_ids @> ARRAY[NEW.industry_id]

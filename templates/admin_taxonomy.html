@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Admin · Categories & Industries{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+  <h1>Admin · Categories & Industries</h1>
+  <div class="admin-actions">
+    <a class="ghost" href="{{ url_for('admin_index', run=1) }}">Back to Tenders</a>
+  </div>
+</div>
+
+{% if error %}
+  <div class="alert">{{ error }}</div>
+{% endif %}
+
+<div class="taxonomy-grid">
+  <section class="card">
+    <div class="results-head">
+      <h2>Categories</h2>
+      <p>{{ categories|length }} total</p>
+    </div>
+    <form method="post" action="{% if edit_category %}{{ url_for('admin_category_edit', category_id=edit_category.tender_category_id) }}{% else %}{{ url_for('admin_category_new') }}{% endif %}" class="admin-form taxonomy-form">
+      <label>
+        <span>{% if edit_category %}Edit category{% else %}New category{% endif %}</span>
+        <input type="text" name="name" value="{{ edit_category.name if edit_category else '' }}" placeholder="e.g. Construction" required>
+      </label>
+      <div class="actions">
+        <button type="submit" class="search-cta">{% if edit_category %}Update{% else %}Add{% endif %}</button>
+        {% if edit_category %}
+          <a class="ghost" href="{{ url_for('admin_taxonomy') }}">Cancel</a>
+        {% endif %}
+      </div>
+    </form>
+    <div class="table">
+      <div class="table-row table-head taxonomy">
+        <div>Name</div>
+        <div class="tight">Actions</div>
+      </div>
+      {% for category in categories %}
+      <div class="table-row taxonomy">
+        <div class="wrap">{{ category.name }}</div>
+        <div class="admin-actions tight">
+          <a href="{{ url_for('admin_taxonomy', edit_category_id=category.tender_category_id) }}">Edit</a>
+          <form action="{{ url_for('admin_category_delete', category_id=category.tender_category_id) }}" method="post" onsubmit="return confirm('Delete this category?');">
+            <button type="submit" class="link danger">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      {% if not categories %}
+        <div class="table-row empty">No categories yet.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="results-head">
+      <h2>Industries</h2>
+      <p>{{ industries|length }} total</p>
+    </div>
+    <form method="post" action="{% if edit_industry %}{{ url_for('admin_industry_edit', industry_id=edit_industry.industry_id) }}{% else %}{{ url_for('admin_industry_new') }}{% endif %}" class="admin-form taxonomy-form">
+      <label>
+        <span>{% if edit_industry %}Edit industry{% else %}New industry{% endif %}</span>
+        <input type="text" name="name" value="{{ edit_industry.name if edit_industry else '' }}" placeholder="e.g. Energy" required>
+      </label>
+      <div class="actions">
+        <button type="submit" class="search-cta">{% if edit_industry %}Update{% else %}Add{% endif %}</button>
+        {% if edit_industry %}
+          <a class="ghost" href="{{ url_for('admin_taxonomy') }}">Cancel</a>
+        {% endif %}
+      </div>
+    </form>
+    <div class="table">
+      <div class="table-row table-head taxonomy">
+        <div>Name</div>
+        <div class="tight">Actions</div>
+      </div>
+      {% for industry in industries %}
+      <div class="table-row taxonomy">
+        <div class="wrap">{{ industry.name }}</div>
+        <div class="admin-actions tight">
+          <a href="{{ url_for('admin_taxonomy', edit_industry_id=industry.industry_id) }}">Edit</a>
+          <form action="{{ url_for('admin_industry_delete', industry_id=industry.industry_id) }}" method="post" onsubmit="return confirm('Delete this industry?');">
+            <button type="submit" class="link danger">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      {% if not industries %}
+        <div class="table-row empty">No industries yet.</div>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

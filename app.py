@@ -262,6 +262,18 @@ class TenderSubscription(Base):
     user = relationship("User")
 
 
+class TenderSubscriptionPayment(Base):
+    __tablename__ = "tender_subscription_payments"
+    user_id = Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
+    month_start = Column(Date, primary_key=True)
+    paid = Column(Boolean, nullable=False, default=False)
+    paid_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User")
+
+
 class EmailJob(Base):
     __tablename__ = "email_jobs"
     job_id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
@@ -838,6 +850,23 @@ def parse_date(value: Optional[str]):
         return None
 
 
+def parse_month(value: Optional[str]) -> Optional[datetime.date]:
+    if not value or not value.strip():
+        return None
+    try:
+        year_str, month_str = value.strip().split("-", 1)
+        year = int(year_str)
+        month = int(month_str)
+        return datetime.date(year, month, 1)
+    except (ValueError, TypeError):
+        return None
+
+
+def month_start_today() -> datetime.date:
+    today = datetime.date.today()
+    return datetime.date(today.year, today.month, 1)
+
+
 def upsert_tender(db: Session, tender_id: Optional[str], form: Dict[str, Any]) -> str:
     """Insert or update a tender based on tender_id."""
     payload = {
@@ -930,6 +959,236 @@ def admin_index():
         tenders=tenders,
         show_results=run,
     )
+
+
+@app.route("/admin/users")
+@admin_required
+def admin_users():
+    month_value = request.args.get("month")
+    month_start = parse_month(month_value) or month_start_today()
+    month_value = month_start.strftime("%Y-%m")
+
+    with get_session() as db:
+        users = (
+            db.scalars(
+                select(User)
+                .join(UserRole, UserRole.user_id == User.user_id)
+                .join(Role, Role.role_id == UserRole.role_id)
+                .where(Role.name == "Tender User")
+                .order_by(User.created_at.desc())
+            )
+            .unique()
+            .all()
+        )
+        user_ids = [user.user_id for user in users]
+        subscription_map: Dict[int, TenderSubscription] = {}
+        payment_map: Dict[int, TenderSubscriptionPayment] = {}
+
+        if user_ids:
+            subscriptions = db.scalars(
+                select(TenderSubscription)
+                .where(TenderSubscription.user_id.in_(user_ids))
+                .order_by(TenderSubscription.created_at.desc())
+            ).all()
+            for sub in subscriptions:
+                if sub.user_id not in subscription_map:
+                    subscription_map[sub.user_id] = sub
+
+            payments = db.scalars(
+                select(TenderSubscriptionPayment)
+                .where(TenderSubscriptionPayment.user_id.in_(user_ids))
+                .where(TenderSubscriptionPayment.month_start == month_start)
+            ).all()
+            payment_map = {payment.user_id: payment for payment in payments}
+
+    rows = []
+    paid_count = 0
+    for user in users:
+        subscription = subscription_map.get(user.user_id)
+        payment = payment_map.get(user.user_id)
+        is_paid = bool(payment and payment.paid)
+        if is_paid:
+            paid_count += 1
+        rows.append(
+            {
+                "user_id": user.user_id,
+                "full_name": user.full_name or "—",
+                "email": user.email,
+                "company": subscription.company if subscription else "—",
+                "phone": subscription.phone if subscription else "—",
+                "is_paid": is_paid,
+                "paid_at": payment.paid_at if payment else None,
+            }
+        )
+
+    return render_template(
+        "admin_users.html",
+        month_value=month_value,
+        paid_count=paid_count,
+        total_count=len(rows),
+        rows=rows,
+    )
+
+
+@app.route("/admin/users/<int:user_id>/payment", methods=["POST"])
+@admin_required
+def admin_set_user_payment(user_id: int):
+    month_value = request.form.get("month")
+    month_start = parse_month(month_value) or month_start_today()
+    month_value = month_start.strftime("%Y-%m")
+    paid_value = request.form.get("paid") == "1"
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    with get_session() as db:
+        payment = db.get(TenderSubscriptionPayment, (user_id, month_start))
+        if payment is None:
+            payment = TenderSubscriptionPayment(
+                user_id=user_id,
+                month_start=month_start,
+                paid=paid_value,
+                paid_at=now if paid_value else None,
+            )
+            db.add(payment)
+        else:
+            payment.paid = paid_value
+            payment.paid_at = now if paid_value else None
+        db.commit()
+
+    return redirect(url_for("admin_users", month=month_value))
+
+
+def _load_taxonomy_data(db: Session):
+    categories = db.scalars(select(TenderCategory).order_by(TenderCategory.name)).all()
+    industries = db.scalars(select(Industry).order_by(Industry.name)).all()
+    return categories, industries
+
+
+@app.route("/admin/taxonomy")
+@admin_required
+def admin_taxonomy():
+    edit_category_id = parse_int(request.args.get("edit_category_id"))
+    edit_industry_id = parse_int(request.args.get("edit_industry_id"))
+    error = request.args.get("error")
+    with get_session() as db:
+        categories, industries = _load_taxonomy_data(db)
+        edit_category = db.get(TenderCategory, edit_category_id) if edit_category_id else None
+        edit_industry = db.get(Industry, edit_industry_id) if edit_industry_id else None
+    return render_template(
+        "admin_taxonomy.html",
+        categories=categories,
+        industries=industries,
+        edit_category=edit_category,
+        edit_industry=edit_industry,
+        error=error,
+    )
+
+
+@app.route("/admin/taxonomy/categories/new", methods=["POST"])
+@admin_required
+def admin_category_new():
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        return redirect(url_for("admin_taxonomy", error="Category name is required."))
+    with get_session() as db:
+        existing = db.scalars(select(TenderCategory).filter(func.lower(TenderCategory.name) == name.lower())).one_or_none()
+        if existing:
+            return redirect(url_for("admin_taxonomy", error="Category already exists."))
+        db.add(TenderCategory(name=name))
+        db.commit()
+    return redirect(url_for("admin_taxonomy"))
+
+
+@app.route("/admin/taxonomy/categories/<int:category_id>/edit", methods=["POST"])
+@admin_required
+def admin_category_edit(category_id: int):
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        return redirect(url_for("admin_taxonomy", edit_category_id=category_id, error="Category name is required."))
+    with get_session() as db:
+        category = db.get(TenderCategory, category_id)
+        if not category:
+            return redirect(url_for("admin_taxonomy", error="Category not found."))
+        existing = db.scalars(
+            select(TenderCategory)
+            .filter(func.lower(TenderCategory.name) == name.lower())
+            .filter(TenderCategory.tender_category_id != category_id)
+        ).one_or_none()
+        if existing:
+            return redirect(url_for("admin_taxonomy", edit_category_id=category_id, error="Category already exists."))
+        category.name = name
+        db.commit()
+    return redirect(url_for("admin_taxonomy"))
+
+
+@app.route("/admin/taxonomy/categories/<int:category_id>/delete", methods=["POST"])
+@admin_required
+def admin_category_delete(category_id: int):
+    with get_session() as db:
+        category = db.get(TenderCategory, category_id)
+        if not category:
+            return redirect(url_for("admin_taxonomy", error="Category not found."))
+        in_use = db.scalar(
+            select(func.count()).select_from(Tender).where(Tender.tender_category_id == category_id)
+        )
+        if in_use:
+            return redirect(url_for("admin_taxonomy", error="Category is used by tenders and cannot be deleted."))
+        db.delete(category)
+        db.commit()
+    return redirect(url_for("admin_taxonomy"))
+
+
+@app.route("/admin/taxonomy/industries/new", methods=["POST"])
+@admin_required
+def admin_industry_new():
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        return redirect(url_for("admin_taxonomy", error="Industry name is required."))
+    with get_session() as db:
+        existing = db.scalars(select(Industry).filter(func.lower(Industry.name) == name.lower())).one_or_none()
+        if existing:
+            return redirect(url_for("admin_taxonomy", error="Industry already exists."))
+        db.add(Industry(name=name))
+        db.commit()
+    return redirect(url_for("admin_taxonomy"))
+
+
+@app.route("/admin/taxonomy/industries/<int:industry_id>/edit", methods=["POST"])
+@admin_required
+def admin_industry_edit(industry_id: int):
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        return redirect(url_for("admin_taxonomy", edit_industry_id=industry_id, error="Industry name is required."))
+    with get_session() as db:
+        industry = db.get(Industry, industry_id)
+        if not industry:
+            return redirect(url_for("admin_taxonomy", error="Industry not found."))
+        existing = db.scalars(
+            select(Industry)
+            .filter(func.lower(Industry.name) == name.lower())
+            .filter(Industry.industry_id != industry_id)
+        ).one_or_none()
+        if existing:
+            return redirect(url_for("admin_taxonomy", edit_industry_id=industry_id, error="Industry already exists."))
+        industry.name = name
+        db.commit()
+    return redirect(url_for("admin_taxonomy"))
+
+
+@app.route("/admin/taxonomy/industries/<int:industry_id>/delete", methods=["POST"])
+@admin_required
+def admin_industry_delete(industry_id: int):
+    with get_session() as db:
+        industry = db.get(Industry, industry_id)
+        if not industry:
+            return redirect(url_for("admin_taxonomy", error="Industry not found."))
+        in_use = db.scalar(
+            select(func.count()).select_from(Tender).where(Tender.industry_id == industry_id)
+        )
+        if in_use:
+            return redirect(url_for("admin_taxonomy", error="Industry is used by tenders and cannot be deleted."))
+        db.delete(industry)
+        db.commit()
+    return redirect(url_for("admin_taxonomy"))
 
 
 @app.route("/admin/tenders/new", methods=["GET", "POST"])

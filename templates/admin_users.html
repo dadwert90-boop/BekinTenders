@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Admin · Users & Payments{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+  <h1>Admin · Users & Payments</h1>
+  <div class="admin-actions">
+    <a class="ghost" href="{{ url_for('admin_index', run=1) }}">Back to Tenders</a>
+  </div>
+</div>
+
+<section class="filter-bar">
+  <form method="get" class="filters filters-inline">
+    <label>
+      <span>Billing month</span>
+      <input type="month" name="month" value="{{ month_value }}" required>
+    </label>
+    <div class="actions actions-inline">
+      <button type="submit" class="search-cta">Filter</button>
+      <a class="ghost" href="{{ url_for('admin_users') }}">This month</a>
+    </div>
+  </form>
+</section>
+
+<section class="results">
+  <div class="results-head">
+    <h2>Users</h2>
+    <p>{{ paid_count }} paid · {{ total_count }} total</p>
+  </div>
+  <div class="card table-card">
+    <div class="table">
+      <div class="table-row table-head users">
+        <div>Name</div>
+        <div>Email</div>
+        <div>Company</div>
+        <div>Phone</div>
+        <div>Month</div>
+        <div>Status</div>
+        <div class="tight">Actions</div>
+      </div>
+      {% for row in rows %}
+      <div class="table-row users">
+        <div class="tight">{{ row.full_name }}</div>
+        <div class="wrap">{{ row.email }}</div>
+        <div>{{ row.company }}</div>
+        <div>{{ row.phone }}</div>
+        <div>{{ month_value }}</div>
+        <div>
+          {% if row.is_paid %}
+            <span class="pill paid">Paid</span>
+          {% else %}
+            <span class="pill unpaid">Unpaid</span>
+          {% endif %}
+        </div>
+        <div class="admin-actions tight">
+          <form method="post" action="{{ url_for('admin_set_user_payment', user_id=row.user_id) }}">
+            <input type="hidden" name="month" value="{{ month_value }}">
+            {% if row.is_paid %}
+              <button type="submit" name="paid" value="0" class="link">Mark unpaid</button>
+            {% else %}
+              <button type="submit" name="paid" value="1" class="link">Mark paid</button>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      {% if not rows %}
+        <div class="table-row empty">No tender users found.</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}
