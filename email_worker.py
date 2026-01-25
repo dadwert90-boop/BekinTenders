@@ -61,6 +61,7 @@ def _sendgrid_email(recipient_email: str, payload: Dict[str, Any]) -> None:
     mail_payload = {
         "personalizations": [{"to": [{"email": recipient_email}]}],
         "from": {"email": sender_email},
+        "reply_to": {"email": sender_email},
         "subject": subject,
         "content": [{"type": "text/html", "value": html_content}],
     }

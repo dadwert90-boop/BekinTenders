@@ -447,6 +447,22 @@ def _build_payfast_api_signature(headers: Dict[str, Any], body: Dict[str, Any]) 
     return hashlib.md5(normalized.encode("utf-8")).hexdigest()
 
 
+def _build_payfast_form_signature(params: Dict[str, Any]) -> str:
+    filtered = {
+        k: str(v)
+        for k, v in params.items()
+        if v not in (None, "") and k != "signature"
+    }
+    normalized = urllib.parse.urlencode(
+        sorted(filtered.items()),
+        quote_via=urllib.parse.quote_plus,
+    )
+    if PAYFAST_PASSPHRASE:
+        passphrase = urllib.parse.quote_plus(PAYFAST_PASSPHRASE)
+        normalized = f"{normalized}&passphrase={passphrase}"
+    return hashlib.md5(normalized.encode("utf-8")).hexdigest()
+
+
 def _payfast_api_request(method: str, path: str, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     url = f"{PAYFAST_API_BASE_URL.rstrip('/')}{path}"
     timestamp = _current_iso_timestamp()
@@ -509,14 +525,7 @@ def _prepare_payfast_payment(
         "custom_str1": custom_str1,
         "email_confirmation": "1",
     }
-    params["timestamp"] = _current_iso_timestamp()
-    params["version"] = PAYFAST_API_VERSION
-    signature_headers = {
-        "merchant-id": PAYFAST_MERCHANT_ID,
-        "version": PAYFAST_API_VERSION,
-        "timestamp": params["timestamp"],
-    }
-    params["signature"] = _build_payfast_api_signature(signature_headers, params)
+    params["signature"] = _build_payfast_form_signature(params)
     return {
         "form_action": PAYFAST_URL,
         "display_amount": f"{total_amount:,.2f}",
@@ -534,6 +543,7 @@ def _sendgrid_admin_notification(subject: str, html_content: str) -> None:
     mail_payload = {
         "personalizations": [{"to": [{"email": ADMIN_NOTIFY_EMAIL}]}],
         "from": {"email": sender_email},
+        "reply_to": {"email": sender_email},
         "subject": subject,
         "content": [{"type": "text/html", "value": html_content}],
     }
