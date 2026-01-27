@@ -21,7 +21,6 @@
     {% if session.get("is_admin") %}
       <a href="{{ url_for('admin_index', run=1) }}">Admin Dashboard</a>
       <a href="{{ url_for('admin_users') }}">Users & Payments</a>
-      <a href="{{ url_for('admin_taxonomy') }}">Categories & Industries</a>
       <a href="{{ url_for('admin_logout') }}">Log out</a>
     {% else %}
       <a href="{{ url_for('admin_login') }}">Admin Dashboard</a>
