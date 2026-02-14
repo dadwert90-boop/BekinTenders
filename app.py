@@ -561,6 +561,48 @@ def _sendgrid_admin_notification(subject: str, html_content: str) -> None:
             raise RuntimeError(f"SendGrid returned status {response.status}")
 
 
+def _sendgrid_payment_reminder(recipient_email: str, full_name: str, amount: int, payment_url: str) -> None:
+    api_key = os.environ.get("SENDGRID_API_KEY")
+    if not api_key:
+        logger.warning("SENDGRID_API_KEY is not set; skipping payment reminder email.")
+        return
+
+    sender_email = os.environ.get("SENDGRID_FROM_EMAIL", "tenders@bekinconsulting.co.za")
+    display_name = full_name or "there"
+    html_content = f"""
+    <p>Hi {display_name},</p>
+    <p>This is a reminder that your next month tender alerts subscription payment is due.</p>
+    <p>
+      Amount due: <strong>R{amount:,.2f}</strong><br>
+      Please complete payment to continue receiving tenders.
+    </p>
+    <p>
+      <a href="{payment_url}" style="display:inline-block;padding:12px 24px;border-radius:8px;background:#0f2c56;color:#fff;font-weight:700;text-decoration:none;">Pay now</a>
+    </p>
+    <p>Thank you,<br>BekinTenders Team</p>
+    """
+
+    mail_payload = {
+        "personalizations": [{"to": [{"email": recipient_email}]}],
+        "from": {"email": sender_email},
+        "reply_to": {"email": sender_email},
+        "subject": "Payment reminder: tender alerts subscription",
+        "content": [{"type": "text/html", "value": html_content}],
+    }
+
+    request = urllib.request.Request(
+        "https://api.sendgrid.com/v3/mail/send",
+        data=json.dumps(mail_payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        if getattr(response, "status", 0) >= 400:
+            raise RuntimeError(f"SendGrid returned status {response.status}")
+
+
 def ensure_admin_user(db: Session):
     """Ensure the default admin user exists with the Admin role."""
     role_id = ensure_role(db, "Admin")
@@ -1040,6 +1082,20 @@ def month_start_today() -> datetime.date:
     return datetime.date(today.year, today.month, 1)
 
 
+def _parse_month_value(value: Optional[str]) -> Optional[int]:
+    month = parse_int(value)
+    if month is None or month < 1 or month > 12:
+        return None
+    return month
+
+
+def _parse_year_value(value: Optional[str]) -> Optional[int]:
+    year = parse_int(value)
+    if year is None or year < 2000 or year > 2100:
+        return None
+    return year
+
+
 def ensure_category(db: Session, name: str) -> int:
     cleaned = name.strip()
     if not cleaned:
@@ -1170,6 +1226,17 @@ def admin_users():
     month_value = request.args.get("month")
     month_start = parse_month(month_value) or month_start_today()
     month_value = month_start.strftime("%Y-%m")
+    service_type = (request.args.get("service_type") or "").strip()
+    month_start_dt = datetime.datetime(
+        month_start.year,
+        month_start.month,
+        1,
+        tzinfo=datetime.timezone.utc,
+    )
+    if month_start.month == 12:
+        month_end_dt = datetime.datetime(month_start.year + 1, 1, 1, tzinfo=datetime.timezone.utc)
+    else:
+        month_end_dt = datetime.datetime(month_start.year, month_start.month + 1, 1, tzinfo=datetime.timezone.utc)
 
     with get_session() as db:
         users = (
@@ -1203,6 +1270,16 @@ def admin_users():
                 .where(TenderSubscriptionPayment.month_start == month_start)
             ).all()
             payment_map = {payment.user_id: payment for payment in payments}
+        service_stmt = (
+            select(ServiceRequest)
+            .where(ServiceRequest.status == "paid")
+            .where(ServiceRequest.paid_at >= month_start_dt)
+            .where(ServiceRequest.paid_at < month_end_dt)
+            .order_by(ServiceRequest.paid_at.desc())
+        )
+        if service_type:
+            service_stmt = service_stmt.where(ServiceRequest.service_slug == service_type)
+        service_requests = db.scalars(service_stmt).all()
 
     rows = []
     paid_count = 0
@@ -1224,12 +1301,30 @@ def admin_users():
             }
         )
 
+    service_rows = [
+        {
+            "service_label": req.service_label,
+            "service_slug": req.service_slug,
+            "amount": req.amount,
+            "paid_at": req.paid_at,
+            "full_name": req.full_name,
+            "email": req.email,
+            "phone": req.phone,
+            "company": req.company,
+            "tender_ref": req.tender_ref,
+        }
+        for req in service_requests
+    ]
+
     return render_template(
         "admin_users.html",
         month_value=month_value,
         paid_count=paid_count,
         total_count=len(rows),
         rows=rows,
+        service_rows=service_rows,
+        service_options=SERVICE_OPTIONS,
+        service_type=service_type,
     )
 
 
@@ -1258,6 +1353,123 @@ def admin_set_user_payment(user_id: int):
         db.commit()
 
     return redirect(url_for("admin_users", month=month_value))
+
+
+@app.route("/admin/users/<int:user_id>/payment-reminder", methods=["POST"])
+@admin_required
+def admin_send_payment_reminder(user_id: int):
+    month_value = request.form.get("month")
+    with get_session() as db:
+        user = db.get(User, user_id)
+        if not user:
+            abort(404)
+        subscription = db.scalars(
+            select(TenderSubscription)
+            .where(TenderSubscription.user_id == user_id)
+            .order_by(TenderSubscription.created_at.desc())
+        ).first()
+        if not subscription or subscription.total_amount <= 0:
+            return redirect(url_for("admin_users", month=month_value))
+
+    base_url = os.environ.get("APP_BASE_URL") or request.url_root.rstrip("/")
+    payment_url = f"{base_url}{url_for('subscribe_pay', user_id=user_id)}"
+    _sendgrid_payment_reminder(
+        recipient_email=user.email,
+        full_name=user.full_name or "",
+        amount=subscription.total_amount,
+        payment_url=payment_url,
+    )
+    return redirect(url_for("admin_users", month=month_value))
+
+
+@app.route("/subscribe/pay/<int:user_id>")
+def subscribe_pay(user_id: int):
+    with get_session() as db:
+        user = db.get(User, user_id)
+        if not user:
+            abort(404)
+        subscription = db.scalars(
+            select(TenderSubscription)
+            .where(TenderSubscription.user_id == user_id)
+            .order_by(TenderSubscription.created_at.desc())
+        ).first()
+        if not subscription or subscription.total_amount <= 0:
+            abort(404)
+        payment_data = _prepare_payfast_payment(
+            subscription.total_amount,
+            subscription.subscription_id,
+            user.email,
+            user.full_name or user.email,
+            request.url_root,
+            f"Tender alerts ({user.email})",
+            user.full_name or "Tender subscription",
+            "tender_subscription",
+        )
+    return render_template("payfast_redirect.html", payment_data=payment_data)
+
+
+@app.route("/admin/emails")
+@admin_required
+def admin_emails():
+    today = datetime.date.today()
+    month_value = _parse_month_value(request.args.get("month")) or today.month
+    year_value = _parse_year_value(request.args.get("year")) or today.year
+
+    start = datetime.datetime(year_value, month_value, 1, tzinfo=datetime.timezone.utc)
+    if month_value == 12:
+        end = datetime.datetime(year_value + 1, 1, 1, tzinfo=datetime.timezone.utc)
+    else:
+        end = datetime.datetime(year_value, month_value + 1, 1, tzinfo=datetime.timezone.utc)
+
+    with get_session() as db:
+        jobs = (
+            db.scalars(
+                select(EmailJob)
+                .where(EmailJob.status == "sent")
+                .where(EmailJob.created_at >= start)
+                .where(EmailJob.created_at < end)
+                .order_by(EmailJob.created_at.desc())
+            )
+            .unique()
+            .all()
+        )
+
+    month_options = [
+        {"value": idx, "label": datetime.date(2000, idx, 1).strftime("%B")}
+        for idx in range(1, 13)
+    ]
+    year_options = list(range(today.year - 3, today.year + 1))
+
+    return render_template(
+        "admin_emails.html",
+        jobs=jobs,
+        month_value=month_value,
+        year_value=year_value,
+        month_options=month_options,
+        year_options=year_options,
+    )
+
+
+@app.route("/admin/emails/<uuid:job_id>/resend", methods=["POST"])
+@admin_required
+def admin_resend_email(job_id: uuid.UUID):
+    month_value = request.form.get("month")
+    year_value = request.form.get("year")
+    with get_session() as db:
+        job = db.get(EmailJob, job_id)
+        if not job:
+            abort(404)
+        new_job = EmailJob(
+            tender_id=job.tender_id,
+            recipient_email=job.recipient_email,
+            payload=job.payload or {},
+            status="pending",
+            attempts=0,
+            max_attempts=job.max_attempts,
+        )
+        db.add(new_job)
+        db.commit()
+    return redirect(url_for("admin_emails", month=month_value, year=year_value))
 
 
 def _load_taxonomy_data(db: Session):

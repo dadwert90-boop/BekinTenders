@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Admin · Emails{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <p class="admin-sidebar-title">Menu</p>
+    <a class="admin-side-link" href="{{ url_for('admin_index', run=1) }}">Tenders</a>
+    <a class="admin-side-link" href="{{ url_for('admin_users') }}">Users & Payments</a>
+    <a class="admin-side-link active" href="{{ url_for('admin_emails') }}">Emails</a>
+  </aside>
+  <div class="admin-main">
+    <div class="admin-header">
+      <h1>Admin · Emails</h1>
+    </div>
+
+    <section class="filter-bar">
+      <form method="get" class="filters filters-inline">
+        <label>
+          <span>Month</span>
+          <select name="month">
+            {% for month in month_options %}
+              <option value="{{ month.value }}" {% if month_value == month.value %}selected{% endif %}>{{ month.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span>Year</span>
+          <select name="year">
+            {% for year in year_options %}
+              <option value="{{ year }}" {% if year_value == year %}selected{% endif %}>{{ year }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <div class="actions actions-inline">
+          <button type="submit" class="search-cta">Filter</button>
+          <a class="ghost" href="{{ url_for('admin_emails') }}">This month</a>
+        </div>
+      </form>
+    </section>
+
+    <section class="results">
+      <div class="results-head">
+        <h2>Sent emails</h2>
+        <p>{{ jobs|length }} sent</p>
+      </div>
+      <div class="card table-card">
+        <div class="table">
+          <div class="table-row table-head emails">
+            <div>Recipient</div>
+            <div>Tender</div>
+            <div>Sent</div>
+            <div>Attempts</div>
+            <div class="tight">Actions</div>
+          </div>
+          {% for job in jobs %}
+          <div class="table-row emails">
+            <div class="wrap">{{ job.recipient_email }}</div>
+            <div class="wrap">
+              <strong>{{ job.payload.tender_ref if job.payload else '—' }}</strong><br>
+              {{ job.payload.tender_description if job.payload else '—' }}
+            </div>
+            <div class="tight">{{ job.updated_at|datetime_fmt }}</div>
+            <div class="tight">{{ job.attempts }}</div>
+            <div class="admin-actions tight">
+              <form method="post" action="{{ url_for('admin_resend_email', job_id=job.job_id) }}">
+                <input type="hidden" name="month" value="{{ month_value }}">
+                <input type="hidden" name="year" value="{{ year_value }}">
+                <button type="submit" class="link">Resend</button>
+              </form>
+            </div>
+          </div>
+          {% endfor %}
+          {% if not jobs %}
+            <div class="table-row empty">No sent emails for this period.</div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

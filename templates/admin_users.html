@@ -7,6 +7,7 @@
     <p class="admin-sidebar-title">Menu</p>
     <a class="admin-side-link" href="{{ url_for('admin_index', run=1) }}">Tenders</a>
     <a class="admin-side-link active" href="{{ url_for('admin_users') }}">Users & Payments</a>
+    <a class="admin-side-link" href="{{ url_for('admin_emails') }}">Emails</a>
   </aside>
   <div class="admin-main">
     <div class="admin-header">
@@ -21,6 +22,15 @@
     <label>
       <span>Billing month</span>
       <input type="month" name="month" value="{{ month_value }}" required>
+    </label>
+    <label>
+      <span>Service type</span>
+      <select name="service_type">
+        <option value="">All services</option>
+        {% for service in service_options %}
+          <option value="{{ service.slug }}" {% if service_type == service.slug %}selected{% endif %}>{{ service.label }}</option>
+        {% endfor %}
+      </select>
     </label>
     <div class="actions actions-inline">
       <button type="submit" class="search-cta">Filter</button>
@@ -68,14 +78,53 @@
               <button type="submit" name="paid" value="1" class="link">Mark paid</button>
             {% endif %}
           </form>
+          <form method="post" action="{{ url_for('admin_send_payment_reminder', user_id=row.user_id) }}">
+            <input type="hidden" name="month" value="{{ month_value }}">
+            <button type="submit" class="link">Send reminder</button>
+          </form>
         </div>
       </div>
       {% endfor %}
-      {% if not rows %}
+{% if not rows %}
         <div class="table-row empty">No tender users found.</div>
       {% endif %}
     </div>
   </div>
+    </section>
+    <section class="results">
+      <div class="results-head">
+        <h2>Service payments</h2>
+        <p>{{ service_rows|length }} paid</p>
+      </div>
+      <div class="card table-card">
+        <div class="table">
+          <div class="table-row table-head service-payments">
+            <div>Service</div>
+            <div>Amount</div>
+            <div>Paid</div>
+            <div>Name</div>
+            <div>Email</div>
+            <div>Phone</div>
+            <div>Company</div>
+            <div>Tender ref</div>
+          </div>
+          {% for row in service_rows %}
+          <div class="table-row service-payments">
+            <div>{{ row.service_label }}</div>
+            <div class="tight">R{{ "%0.2f"|format(row.amount) }}</div>
+            <div class="tight">{{ row.paid_at|datetime_fmt }}</div>
+            <div class="wrap">{{ row.full_name }}</div>
+            <div class="wrap">{{ row.email }}</div>
+            <div class="wrap">{{ row.phone or '—' }}</div>
+            <div class="wrap">{{ row.company or '—' }}</div>
+            <div class="wrap">{{ row.tender_ref or '—' }}</div>
+          </div>
+          {% endfor %}
+          {% if not service_rows %}
+            <div class="table-row empty">No paid services for this period.</div>
+          {% endif %}
+        </div>
+      </div>
     </section>
   </div>
 </div>

@@ -290,6 +290,8 @@ button {
 .table-row > div:nth-child(6) { color: var(--accent-2); font-weight: 700; }
 .table-row.users { grid-template-columns: 1.2fr 2fr 1.4fr 1.1fr 0.8fr 0.9fr 1fr; }
 .table-row.taxonomy { grid-template-columns: 2.6fr 1fr; }
+.table-row.emails { grid-template-columns: 1.6fr 2.8fr 1fr 0.7fr 0.8fr; }
+.table-row.service-payments { grid-template-columns: 1.2fr 0.8fr 1fr 1.2fr 1.4fr 1fr 1.2fr 1.2fr; }
 
 .pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .pill.paid { background: rgba(24, 130, 69, 0.12); color: #1b6b3b; border: 1px solid rgba(24, 130, 69, 0.3); }
