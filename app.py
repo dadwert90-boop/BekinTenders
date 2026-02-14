@@ -1227,6 +1227,8 @@ def admin_users():
     month_start = parse_month(month_value) or month_start_today()
     month_value = month_start.strftime("%Y-%m")
     service_type = (request.args.get("service_type") or "").strip()
+    payment_kind = (request.args.get("payment_kind") or "").strip()
+    status_filter = (request.args.get("status") or "").strip()
     month_start_dt = datetime.datetime(
         month_start.year,
         month_start.month,
@@ -1282,39 +1284,55 @@ def admin_users():
         service_requests = db.scalars(service_stmt).all()
 
     rows = []
-    paid_count = 0
     for user in users:
         subscription = subscription_map.get(user.user_id)
         payment = payment_map.get(user.user_id)
         is_paid = bool(payment and payment.paid)
-        if is_paid:
-            paid_count += 1
-        rows.append(
-            {
-                "user_id": user.user_id,
-                "full_name": user.full_name or "—",
-                "email": user.email,
-                "company": subscription.company if subscription else "—",
-                "phone": subscription.phone if subscription else "—",
-                "is_paid": is_paid,
-                "paid_at": payment.paid_at if payment else None,
-            }
-        )
+        if payment_kind != "service":
+            if status_filter == "paid" and not is_paid:
+                continue
+            if status_filter == "unpaid" and is_paid:
+                continue
+            rows.append(
+                {
+                    "row_type": "subscription",
+                    "service_label": "Tender Alerts",
+                    "amount": subscription.total_amount if subscription else 0,
+                    "paid_at": payment.paid_at if payment else None,
+                    "full_name": user.full_name or "—",
+                    "email": user.email,
+                    "phone": subscription.phone if subscription else "—",
+                    "company": subscription.company if subscription else "—",
+                    "tender_ref": "—",
+                    "user_id": user.user_id,
+                    "is_paid": is_paid,
+                }
+            )
 
-    service_rows = [
-        {
-            "service_label": req.service_label,
-            "service_slug": req.service_slug,
-            "amount": req.amount,
-            "paid_at": req.paid_at,
-            "full_name": req.full_name,
-            "email": req.email,
-            "phone": req.phone,
-            "company": req.company,
-            "tender_ref": req.tender_ref,
-        }
-        for req in service_requests
-    ]
+    if payment_kind != "subscription":
+        for req in service_requests:
+            if status_filter == "unpaid":
+                continue
+            if status_filter == "paid":
+                pass
+            rows.append(
+                {
+                    "row_type": "service",
+                    "service_label": req.service_label,
+                    "amount": req.amount,
+                    "paid_at": req.paid_at,
+                    "full_name": req.full_name,
+                    "email": req.email,
+                    "phone": req.phone or "—",
+                    "company": req.company or "—",
+                    "tender_ref": req.tender_ref or "—",
+                    "user_id": None,
+                    "is_paid": True,
+                }
+            )
+
+    rows.sort(key=lambda item: item.get("paid_at") or datetime.datetime.min, reverse=True)
+    paid_count = sum(1 for row in rows if row.get("is_paid"))
 
     return render_template(
         "admin_users.html",
@@ -1322,9 +1340,10 @@ def admin_users():
         paid_count=paid_count,
         total_count=len(rows),
         rows=rows,
-        service_rows=service_rows,
         service_options=SERVICE_OPTIONS,
         service_type=service_type,
+        payment_kind=payment_kind,
+        status_filter=status_filter,
     )
 
 

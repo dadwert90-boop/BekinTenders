@@ -24,6 +24,22 @@
       <input type="month" name="month" value="{{ month_value }}" required>
     </label>
     <label>
+      <span>Payment group</span>
+      <select name="payment_kind">
+        <option value="" {% if not payment_kind %}selected{% endif %}>All payments</option>
+        <option value="subscription" {% if payment_kind == "subscription" %}selected{% endif %}>Tender Alerts users</option>
+        <option value="service" {% if payment_kind == "service" %}selected{% endif %}>Service payments</option>
+      </select>
+    </label>
+    <label>
+      <span>Status</span>
+      <select name="status">
+        <option value="" {% if not status_filter %}selected{% endif %}>All statuses</option>
+        <option value="paid" {% if status_filter == "paid" %}selected{% endif %}>Paid</option>
+        <option value="unpaid" {% if status_filter == "unpaid" %}selected{% endif %}>Unpaid</option>
+      </select>
+    </label>
+    <label>
       <span>Service type</span>
       <select name="service_type">
         <option value="">All services</option>
@@ -41,90 +57,63 @@
 
 <section class="results">
   <div class="results-head">
-    <h2>Users</h2>
+    <h2>Payments</h2>
     <p>{{ paid_count }} paid · {{ total_count }} total</p>
   </div>
   <div class="card table-card">
     <div class="table">
-      <div class="table-row table-head users">
+      <div class="table-row table-head payments">
+        <div>Type</div>
+        <div>Amount</div>
+        <div>Paid</div>
         <div>Name</div>
         <div>Email</div>
-        <div>Company</div>
         <div>Phone</div>
-        <div>Month</div>
-        <div>Status</div>
+        <div>Company</div>
+        <div>Tender ref</div>
         <div class="tight">Actions</div>
       </div>
       {% for row in rows %}
-      <div class="table-row users">
-        <div class="tight">{{ row.full_name }}</div>
-        <div class="wrap">{{ row.email }}</div>
-        <div>{{ row.company }}</div>
-        <div>{{ row.phone }}</div>
-        <div>{{ month_value }}</div>
-        <div>
-          {% if row.is_paid %}
-            <span class="pill paid">Paid</span>
+      <div class="table-row payments">
+        <div>{{ row.service_label }}</div>
+        <div class="tight">R{{ "%0.2f"|format(row.amount) }}</div>
+        <div class="tight">
+          {% if row.paid_at %}
+            {{ row.paid_at|datetime_fmt }}
           {% else %}
-            <span class="pill unpaid">Unpaid</span>
+            {{ month_value }}
           {% endif %}
         </div>
+        <div class="wrap">{{ row.full_name }}</div>
+        <div class="wrap">{{ row.email }}</div>
+        <div class="wrap">{{ row.phone }}</div>
+        <div class="wrap">{{ row.company }}</div>
+        <div class="wrap">{{ row.tender_ref }}</div>
         <div class="admin-actions tight">
-          <form method="post" action="{{ url_for('admin_set_user_payment', user_id=row.user_id) }}">
-            <input type="hidden" name="month" value="{{ month_value }}">
-            {% if row.is_paid %}
-              <button type="submit" name="paid" value="0" class="link">Mark unpaid</button>
-            {% else %}
-              <button type="submit" name="paid" value="1" class="link">Mark paid</button>
-            {% endif %}
-          </form>
-          <form method="post" action="{{ url_for('admin_send_payment_reminder', user_id=row.user_id) }}">
-            <input type="hidden" name="month" value="{{ month_value }}">
-            <button type="submit" class="link">Send reminder</button>
-          </form>
+          {% if row.row_type == "subscription" and row.user_id %}
+            <form method="post" action="{{ url_for('admin_set_user_payment', user_id=row.user_id) }}">
+              <input type="hidden" name="month" value="{{ month_value }}">
+              {% if row.is_paid %}
+                <button type="submit" name="paid" value="0" class="link">Mark unpaid</button>
+              {% else %}
+                <button type="submit" name="paid" value="1" class="link">Mark paid</button>
+              {% endif %}
+            </form>
+            <form method="post" action="{{ url_for('admin_send_payment_reminder', user_id=row.user_id) }}">
+              <input type="hidden" name="month" value="{{ month_value }}">
+              <button type="submit" class="link">Send reminder</button>
+            </form>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
         </div>
       </div>
       {% endfor %}
-{% if not rows %}
-        <div class="table-row empty">No tender users found.</div>
+      {% if not rows %}
+        <div class="table-row empty">No payments found for this period.</div>
       {% endif %}
     </div>
   </div>
-    </section>
-    <section class="results">
-      <div class="results-head">
-        <h2>Service payments</h2>
-        <p>{{ service_rows|length }} paid</p>
-      </div>
-      <div class="card table-card">
-        <div class="table">
-          <div class="table-row table-head service-payments">
-            <div>Service</div>
-            <div>Amount</div>
-            <div>Paid</div>
-            <div>Name</div>
-            <div>Email</div>
-            <div>Phone</div>
-            <div>Company</div>
-            <div>Tender ref</div>
-          </div>
-          {% for row in service_rows %}
-          <div class="table-row service-payments">
-            <div>{{ row.service_label }}</div>
-            <div class="tight">R{{ "%0.2f"|format(row.amount) }}</div>
-            <div class="tight">{{ row.paid_at|datetime_fmt }}</div>
-            <div class="wrap">{{ row.full_name }}</div>
-            <div class="wrap">{{ row.email }}</div>
-            <div class="wrap">{{ row.phone or '—' }}</div>
-            <div class="wrap">{{ row.company or '—' }}</div>
-            <div class="wrap">{{ row.tender_ref or '—' }}</div>
-          </div>
-          {% endfor %}
-          {% if not service_rows %}
-            <div class="table-row empty">No paid services for this period.</div>
-          {% endif %}
-        </div>
-      </div>
     </section>
   </div>
 </div>

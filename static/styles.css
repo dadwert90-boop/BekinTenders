@@ -197,7 +197,7 @@ button {
 .results-head p { color: var(--accent); background: rgba(31, 131, 255, 0.08); padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(31, 131, 255, 0.15); }
 
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 6px; }
-.admin-actions { display: flex; gap: 8px; align-items: center; }
+.admin-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .admin-actions form { margin: 0; }
 .admin-actions .link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-weight: 700; }
 .admin-actions .danger { color: #c62828; }
@@ -291,7 +291,8 @@ button {
 .table-row.users { grid-template-columns: 1.2fr 2fr 1.4fr 1.1fr 0.8fr 0.9fr 1fr; }
 .table-row.taxonomy { grid-template-columns: 2.6fr 1fr; }
 .table-row.emails { grid-template-columns: 1.6fr 2.8fr 1fr 0.7fr 0.8fr; }
-.table-row.service-payments { grid-template-columns: 1.2fr 0.8fr 1fr 1.2fr 1.4fr 1fr 1.2fr 1.2fr; }
+.table-row.payments { grid-template-columns: 1.2fr 0.8fr 1fr 1.2fr 1.4fr 1fr 1.2fr 1.2fr 1.4fr; }
+.muted { color: var(--muted); }
 
 .pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .pill.paid { background: rgba(24, 130, 69, 0.12); color: #1b6b3b; border: 1px solid rgba(24, 130, 69, 0.3); }
