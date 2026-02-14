@@ -4,7 +4,7 @@
 {% block content %}
 <div class="apply-banner">
   <span>Help me</span>
-  <button type="button" class="apply-btn">Apply</button>
+  <a class="apply-btn" href="{{ url_for('apply', service='tender-review', tender_ref=tender.tender_ref) }}">Apply</a>
   <span>for this tender</span>
 </div>
 

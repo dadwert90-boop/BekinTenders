@@ -713,12 +713,13 @@ def apply():
     submitted = False
     payment_data: Optional[Dict[str, Any]] = None
     payment_error: Optional[str] = None
+    tender_ref_prefill = (request.args.get("tender_ref") or "").strip()
     form_values = {
         "full_name": "",
         "email": "",
         "phone": "",
         "company": "",
-        "tender_ref": "",
+        "tender_ref": tender_ref_prefill,
         "tender_description": "",
     }
     selected_slug = request.args.get("service") or SERVICE_OPTIONS[0]["slug"]

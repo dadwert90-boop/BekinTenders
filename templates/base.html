@@ -12,13 +12,19 @@
       <span class="mark">BEKIN</span>
       <span class="word">Tenders</span>
     </div>
+    <div class="topbar-cta">
+      <a class="bekin-link" href="https://www.bekinconsulting.co.za/" target="_blank" rel="noopener">
+        Go to Bekin Consulting
+      </a>
+    </div>
   <nav class="nav">
-    {% if request.endpoint == "subscribe" %}
-      <a href="{{ url_for('search') }}">Home</a>
-    {% elif request.endpoint and request.endpoint.startswith('admin_') %}
+    {% set is_admin_page = request.endpoint and request.endpoint.startswith('admin_') %}
+    {% if not is_admin_page and request.endpoint != "search" %}
       <a href="{{ url_for('search') }}">Home</a>
     {% endif %}
-    {% if session.get("is_admin") %}
+    {% if is_admin_page %}
+      <a href="{{ url_for('admin_index', run=1) }}">Admin Dashboard</a>
+    {% elif session.get("is_admin") %}
       <a href="{{ url_for('admin_index', run=1) }}">Admin Dashboard</a>
       <a href="{{ url_for('admin_users') }}">Users & Payments</a>
       <a href="{{ url_for('admin_logout') }}">Log out</a>

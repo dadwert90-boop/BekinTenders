@@ -2,13 +2,20 @@
 {% block title %}{{ action }} Tender{% endblock %}
 
 {% block content %}
-<div class="admin-header">
-  <h1>{{ action }} Tender</h1>
-  <a class="ghost" href="{{ url_for('admin_index', run=1) }}">Back</a>
-</div>
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <p class="admin-sidebar-title">Menu</p>
+    <a class="admin-side-link active" href="{{ url_for('admin_index', run=1) }}">Tenders</a>
+    <a class="admin-side-link" href="{{ url_for('admin_users') }}">Users & Payments</a>
+  </aside>
+  <div class="admin-main">
+    <div class="admin-header">
+      <h1>{{ action }} Tender</h1>
+      <a class="ghost" href="{{ url_for('admin_index', run=1) }}">Back</a>
+    </div>
 
-<div class="card">
-  <form method="post" class="admin-form">
+    <div class="card">
+      <form method="post" class="admin-form">
     <div class="form-grid">
       <label>
         <span>Reference *</span>
@@ -101,6 +108,8 @@
       <button type="submit" class="search-cta">Save</button>
       <a class="ghost" href="{{ url_for('admin_index', run=1) }}">Cancel</a>
     </div>
-  </form>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}

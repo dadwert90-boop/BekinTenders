@@ -2,18 +2,25 @@
 {% block title %}Admin · Categories & Industries{% endblock %}
 
 {% block content %}
-<div class="admin-header">
-  <h1>Admin · Categories & Industries</h1>
-  <div class="admin-actions">
-    <a class="ghost" href="{{ url_for('admin_index', run=1) }}">Back to Tenders</a>
-  </div>
-</div>
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <p class="admin-sidebar-title">Menu</p>
+    <a class="admin-side-link" href="{{ url_for('admin_index', run=1) }}">Tenders</a>
+    <a class="admin-side-link" href="{{ url_for('admin_users') }}">Users & Payments</a>
+  </aside>
+  <div class="admin-main">
+    <div class="admin-header">
+      <h1>Admin · Categories & Industries</h1>
+      <div class="admin-actions">
+        <a class="ghost" href="{{ url_for('admin_index', run=1) }}">Back to Tenders</a>
+      </div>
+    </div>
 
-{% if error %}
-  <div class="alert">{{ error }}</div>
-{% endif %}
+    {% if error %}
+      <div class="alert">{{ error }}</div>
+    {% endif %}
 
-<div class="taxonomy-grid">
+    <div class="taxonomy-grid">
   <section class="card">
     <div class="results-head">
       <h2>Categories</h2>
@@ -91,5 +98,7 @@
       {% endif %}
     </div>
   </section>
+    </div>
+  </div>
 </div>
 {% endblock %}

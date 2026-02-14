@@ -78,6 +78,7 @@
         <div>Ref</div>
         <div>Description</div>
         <div>Category</div>
+        <div>Industry</div>
         <div>Province</div>
         <div>Type</div>
         <div>Closing</div>
@@ -87,6 +88,7 @@
         <div class="tight">{{ t.tender_ref }}</div>
         <div class="wrap">{{ t.tender_description }}</div>
         <div>{{ t.category or '—' }}</div>
+        <div>{{ t.industry or '—' }}</div>
         <div>{{ t.province or '—' }}</div>
         <div>{{ t.tender_type or '—' }}</div>
         <div class="tight">{{ t.closing_date|date_fmt }}</div>

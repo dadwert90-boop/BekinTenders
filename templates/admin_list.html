@@ -2,10 +2,17 @@
 {% block title %}Admin · Tenders{% endblock %}
 
 {% block content %}
-<div class="admin-header">
-  <h1>Admin · Tenders</h1>
-  <a class="search-cta" href="{{ url_for('admin_new_tender') }}">New Tender</a>
-</div>
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <p class="admin-sidebar-title">Menu</p>
+    <a class="admin-side-link active" href="{{ url_for('admin_index', run=1) }}">Tenders</a>
+    <a class="admin-side-link" href="{{ url_for('admin_users') }}">Users & Payments</a>
+  </aside>
+  <div class="admin-main">
+    <div class="admin-header">
+      <h1>Admin · Tenders</h1>
+      <a class="search-cta" href="{{ url_for('admin_new_tender') }}">New Tender</a>
+    </div>
 
 <section class="filter-bar">
   <form method="get" class="filters filters-inline">
@@ -55,7 +62,7 @@
       <a class="ghost" href="{{ url_for('admin_index') }}">Reset</a>
     </div>
   </form>
-</section>
+    </section>
 
 {% if show_results %}
 <section class="results">
@@ -68,6 +75,7 @@
       <div class="table-row table-head">
         <div>Ref</div>
         <div>Description</div>
+        <div>Industry</div>
         <div>Province</div>
         <div>Type</div>
         <div>Closing</div>
@@ -77,6 +85,7 @@
       <div class="table-row">
         <div class="tight">{{ t.tender_ref }}</div>
         <div class="wrap">{{ t.tender_description }}</div>
+        <div>{{ t.industry or '—' }}</div>
         <div>{{ t.province or '—' }}</div>
         <div>{{ t.tender_type or '—' }}</div>
         <div class="tight">{{ t.closing_date|date_fmt }}</div>
@@ -93,6 +102,8 @@
       {% endif %}
     </div>
   </div>
-</section>
+    </section>
 {% endif %}
+  </div>
+</div>
 {% endblock %}
