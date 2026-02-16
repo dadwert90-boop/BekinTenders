@@ -104,6 +104,33 @@
       <span>Review summary</span>
       <textarea name="tender_review_summary" rows="2">{{ tender.tender_review_summary if tender else '' }}</textarea>
     </label>
+    <div class="card">
+      <h3>Briefing</h3>
+      <div class="form-grid">
+        <label>
+          <span>Scheduled</span>
+          <select name="briefing_is_scheduled">
+            <option value="0" {% if tender and tender.briefing and not tender.briefing.is_scheduled %}selected{% endif %}>No</option>
+            <option value="1" {% if tender and tender.briefing and tender.briefing.is_scheduled %}selected{% endif %}>Yes</option>
+          </select>
+        </label>
+        <label>
+          <span>Compulsory</span>
+          <select name="briefing_is_compulsory">
+            <option value="0" {% if tender and tender.briefing and not tender.briefing.is_compulsory %}selected{% endif %}>No</option>
+            <option value="1" {% if tender and tender.briefing and tender.briefing.is_compulsory %}selected{% endif %}>Yes</option>
+          </select>
+        </label>
+        <label>
+          <span>Briefing date & time</span>
+          <input type="datetime-local" name="briefing_datetime" value="{% if tender and tender.briefing and tender.briefing.briefing_datetime %}{{ tender.briefing.briefing_datetime.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+        </label>
+        <label>
+          <span>Venue</span>
+          <input type="text" name="briefing_venue" value="{{ tender.briefing.briefing_venue if tender and tender.briefing else '' }}">
+        </label>
+      </div>
+    </div>
 
     <div class="actions actions-inline">
       <button type="submit" class="search-cta">Save</button>

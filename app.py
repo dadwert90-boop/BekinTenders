@@ -1077,6 +1077,18 @@ def parse_month(value: Optional[str]) -> Optional[datetime.date]:
         return None
 
 
+def parse_datetime(value: Optional[str]) -> Optional[datetime.datetime]:
+    if not value or not value.strip():
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed
+
+
 def month_start_today() -> datetime.date:
     today = datetime.date.today()
     return datetime.date(today.year, today.month, 1)
@@ -1145,6 +1157,12 @@ def upsert_tender(db: Session, tender_id: Optional[str], form: Dict[str, Any]) -
         "attachment_download_url": form.get("attachment_download_url") or None,
         "tender_review_summary": form.get("tender_review_summary") or None,
     }
+    briefing_payload = {
+        "is_scheduled": form.get("briefing_is_scheduled") == "1",
+        "is_compulsory": form.get("briefing_is_compulsory") == "1",
+        "briefing_datetime": parse_datetime(form.get("briefing_datetime")),
+        "briefing_venue": (form.get("briefing_venue") or "").strip() or None,
+    }
 
     if tender_id:
         try:
@@ -1156,6 +1174,19 @@ def upsert_tender(db: Session, tender_id: Optional[str], form: Dict[str, Any]) -
             raise ValueError("Tender not found")
         for key, value in payload.items():
             setattr(tender, key, value)
+        if tender.briefing:
+            if any(briefing_payload.values()):
+                tender.briefing.is_scheduled = briefing_payload["is_scheduled"]
+                tender.briefing.is_compulsory = briefing_payload["is_compulsory"]
+                tender.briefing.briefing_datetime = briefing_payload["briefing_datetime"]
+                tender.briefing.briefing_venue = briefing_payload["briefing_venue"]
+            else:
+                db.delete(tender.briefing)
+        elif any(briefing_payload.values()):
+            tender.briefing = TenderBriefing(
+                tender_id=tender.tender_id,
+                **briefing_payload,
+            )
         db.flush()
         return tender_id
 
@@ -1167,6 +1198,13 @@ def upsert_tender(db: Session, tender_id: Optional[str], form: Dict[str, Any]) -
         created_at=datetime.datetime.now(datetime.timezone.utc),
     )
     db.add(new_tender)
+    if any(briefing_payload.values()):
+        db.add(
+            TenderBriefing(
+                tender_id=new_tender.tender_id,
+                **briefing_payload,
+            )
+        )
     db.flush()
     return str(new_tender.tender_id)
 
