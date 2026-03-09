@@ -22,6 +22,7 @@ from sqlalchemy import (
     BigInteger,
     String,
     Text,
+    Time,
     func,
     select,
     or_,
@@ -45,6 +46,9 @@ DEFAULT_ADMIN_EMAIL = os.environ.get("DEFAULT_ADMIN_EMAIL", "admin@admin.com")
 DEFAULT_ADMIN_PASSWORD = os.environ.get("DEFAULT_ADMIN_PASSWORD", "B3kinAdmin!2024")
 DEFAULT_ADMIN_NAME = os.environ.get("DEFAULT_ADMIN_NAME", "Administrator")
 ADMIN_NOTIFY_EMAIL = os.environ.get("ADMIN_NOTIFY_EMAIL", "tenders@bekinconsulting.co.za")
+TENDER_STATUS_ACTIVE = "active"
+TENDER_STATUS_INACTIVE = "inactive"
+VALID_TENDER_STATUSES = {TENDER_STATUS_ACTIVE, TENDER_STATUS_INACTIVE}
 
 SERVICE_OPTIONS = [
     {
@@ -70,8 +74,8 @@ SERVICE_OPTIONS = [
     },
 ]
 
-PAYFAST_MERCHANT_ID = os.environ.get("PAYFAST_MERCHANT_ID", "27480019")
-PAYFAST_MERCHANT_KEY = os.environ.get("PAYFAST_MERCHANT_KEY", "6wb97bgknskbs")
+PAYFAST_MERCHANT_ID = os.environ.get("PAYFAST_MERCHANT_ID", "19383784")
+PAYFAST_MERCHANT_KEY = os.environ.get("PAYFAST_MERCHANT_KEY", "j8uivqtsiv1ub")
 PAYFAST_PASSPHRASE = os.environ.get("PAYFAST_PASSPHRASE")
 PAYFAST_URL = os.environ.get("PAYFAST_URL", "https://www.payfast.co.za/eng/process")
 PAYFAST_API_BASE_URL = os.environ.get("PAYFAST_API_BASE_URL", "https://api.payfast.co.za")
@@ -187,6 +191,7 @@ class Tender(Base):
     tender_category_id = Column(Integer, ForeignKey("tender_categories.tender_category_id"))
     advertised_date = Column(Date)
     closing_date = Column(Date)
+    closing_time = Column(Time)
     industry_id = Column(Integer, ForeignKey("industries.industry_id"))
     requested_by_department_id = Column(Integer, ForeignKey("departments.department_id"))
     tender_type_id = Column(Integer, ForeignKey("tender_types.tender_type_id"))
@@ -200,6 +205,7 @@ class Tender(Base):
     attachment_download_url = Column(Text)
     created_time = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    status = Column(Text, nullable=False, default=TENDER_STATUS_ACTIVE, server_default=TENDER_STATUS_ACTIVE)
     trial_data = Column(JSONB)
     tender_review_summary = Column(Text)
 
@@ -336,16 +342,90 @@ def load_filter_options(db: Session) -> Dict[str, List[Dict[str, Any]]]:
 
 
 _SessionLocal = None
+_tender_status_schema_ready = False
+_tender_closing_time_schema_ready = False
+
+
+def ensure_tender_status_schema(engine: Engine) -> None:
+    global _tender_status_schema_ready
+    if _tender_status_schema_ready:
+        return
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            f"""
+            ALTER TABLE tenders.tenders
+            ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT '{TENDER_STATUS_ACTIVE}'
+            """
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS idx_tenders_status ON tenders.tenders(status)"
+        )
+        conn.exec_driver_sql(
+            f"""
+            UPDATE tenders.tenders
+            SET status = '{TENDER_STATUS_INACTIVE}'
+            WHERE closing_date IS NOT NULL
+              AND closing_date < CURRENT_DATE
+              AND status <> '{TENDER_STATUS_INACTIVE}'
+            """
+        )
+    _tender_status_schema_ready = True
 
 def get_session() -> Session:
     global _SessionLocal
     if _SessionLocal is None:
+        engine = get_engine()
+        ensure_tender_status_schema(engine)
+        ensure_tender_closing_time_schema(engine)
         _SessionLocal = sessionmaker(
-            bind=get_engine(),
+            bind=engine,
             autoflush=False,
             future=True,
         )
     return _SessionLocal()
+
+
+def normalize_tender_status(value: Optional[str]) -> Optional[str]:
+    cleaned = (value or "").strip().lower()
+    if not cleaned:
+        return None
+    if cleaned not in VALID_TENDER_STATUSES:
+        return None
+    return cleaned
+
+
+def ensure_tender_closing_time_schema(engine: Engine) -> None:
+    global _tender_closing_time_schema_ready
+    if _tender_closing_time_schema_ready:
+        return
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            """
+            ALTER TABLE tenders.tenders
+            ADD COLUMN IF NOT EXISTS closing_time TIME
+            """
+        )
+    _tender_closing_time_schema_ready = True
+
+
+def sync_expired_tender_statuses(db: Session) -> None:
+    db.connection().exec_driver_sql(
+        """
+        UPDATE tenders.tenders
+        SET status = 'inactive'
+        WHERE closing_date IS NOT NULL
+          AND closing_date < CURRENT_DATE
+          AND status <> 'inactive'
+        """
+    )
+    db.flush()
+
+
+def resolve_tender_status(requested_status: Optional[str], closing_date: Optional[datetime.date]) -> str:
+    normalized = normalize_tender_status(requested_status) or TENDER_STATUS_ACTIVE
+    if closing_date and closing_date < datetime.date.today():
+        return TENDER_STATUS_INACTIVE
+    return normalized
 
 
 
@@ -640,8 +720,11 @@ def fetch_tenders(
     industry_id: Optional[str],
     province_id: Optional[str],
     tender_type_id: Optional[str],
+    status_filter: Optional[str] = None,
+    include_inactive: bool = False,
 ) -> List[Dict[str, Any]]:
     """Query tenders with optional filters."""
+    sync_expired_tender_statuses(db)
     stmt = select(Tender).options(
         selectinload(Tender.industry),
         selectinload(Tender.tender_type),
@@ -670,9 +753,18 @@ def fetch_tenders(
         stmt = stmt.filter(Tender.province_id == province_id_int)
     if tender_type_id_int is not None:
         stmt = stmt.filter(Tender.tender_type_id == tender_type_id_int)
+    normalized_status = normalize_tender_status(status_filter)
+    if normalized_status:
+        stmt = stmt.filter(Tender.status == normalized_status)
+    elif not include_inactive:
+        stmt = stmt.filter(Tender.status == TENDER_STATUS_ACTIVE)
 
     stmt = stmt.order_by(
-        func.coalesce(Tender.closing_date, Tender.created_time).asc(),
+        func.coalesce(
+            Tender.advertised_date,
+            func.date(Tender.created_time),
+            func.date(Tender.created_at),
+        ).desc(),
         Tender.tender_ref,
     )
 
@@ -684,10 +776,12 @@ def fetch_tenders(
             "tender_description": t.tender_description,
             "advertised_date": t.advertised_date,
             "closing_date": t.closing_date,
+            "closing_time": t.closing_time,
             "tender_type": t.tender_type.code if t.tender_type else None,
             "province": t.province.name if t.province else None,
             "industry": t.industry.name if t.industry else None,
             "category": t.category.name if t.category else None,
+            "status": t.status or TENDER_STATUS_ACTIVE,
         }
         for t in tenders
     ]
@@ -695,6 +789,7 @@ def fetch_tenders(
 
 def fetch_tender_detail(db: Session, tender_id: str) -> Optional[Tender]:
     """Return a single tender with briefing info."""
+    sync_expired_tender_statuses(db)
     try:
         tender_uuid = uuid.UUID(tender_id)
     except ValueError:
@@ -732,6 +827,7 @@ def search():
                 industry_id=industry_id,
                 province_id=province_id,
                 tender_type_id=tender_type_id,
+                status_filter=TENDER_STATUS_ACTIVE,
             )
             if run
             else []
@@ -1051,6 +1147,8 @@ def tender_detail(tender_id: str):
         tender = fetch_tender_detail(db, tender_id)
     if not tender:
         abort(404)
+    if not session.get("is_admin") and (tender.status or TENDER_STATUS_ACTIVE) != TENDER_STATUS_ACTIVE:
+        abort(404)
     return render_template("detail.html", tender=tender)
 
 
@@ -1061,6 +1159,18 @@ def parse_date(value: Optional[str]):
         return None
     try:
         return datetime.date.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
+def parse_time(value: Optional[str]) -> Optional[datetime.time]:
+    if not value or not value.strip():
+        return None
+    raw = value.strip()
+    try:
+        if len(raw) == 5:
+            return datetime.time.fromisoformat(f"{raw}:00")
+        return datetime.time.fromisoformat(raw)
     except ValueError:
         return None
 
@@ -1140,6 +1250,8 @@ def ensure_industry(db: Session, name: str) -> int:
 
 def upsert_tender(db: Session, tender_id: Optional[str], form: Dict[str, Any]) -> str:
     """Insert or update a tender based on tender_id."""
+    closing_date = parse_date(form.get("closing_date"))
+    closing_time = parse_time(form.get("closing_time"))
     payload = {
         "tender_ref": form.get("tender_ref", "").strip(),
         "tender_description": form.get("tender_description", "").strip(),
@@ -1148,7 +1260,9 @@ def upsert_tender(db: Session, tender_id: Optional[str], form: Dict[str, Any]) -
         "province_id": parse_int(form.get("province")),
         "tender_type_id": parse_int(form.get("tender_type")),
         "advertised_date": parse_date(form.get("advertised_date")),
-        "closing_date": parse_date(form.get("closing_date")),
+        "closing_date": closing_date,
+        "closing_time": closing_time,
+        "status": resolve_tender_status(form.get("status"), closing_date),
         "service_location": form.get("service_location") or None,
         "special_conditions": form.get("special_conditions") or None,
         "contact_person": form.get("contact_person") or None,
@@ -1228,6 +1342,7 @@ def admin_index():
     industry_id = request.args.get("industry") or None
     province_id = request.args.get("province") or None
     tender_type_id = request.args.get("tender_type") or None
+    status_filter = (request.args.get("status") or "").strip().lower()
     run = request.args.get("run") == "1"
 
     with get_session() as db:
@@ -1240,6 +1355,8 @@ def admin_index():
                 industry_id=industry_id,
                 province_id=province_id,
                 tender_type_id=tender_type_id,
+                status_filter=status_filter,
+                include_inactive=True,
             )
             if run
             else []
@@ -1252,6 +1369,7 @@ def admin_index():
         industry_id=industry_id,
         province_id=province_id,
         tender_type_id=tender_type_id,
+        status_filter=status_filter,
         options=options,
         tenders=tenders,
         show_results=run,
@@ -1720,6 +1838,13 @@ def date_fmt(value):
     if value is None:
         return "—"
     return value.strftime("%Y-%m-%d")
+
+
+@app.template_filter("time_fmt")
+def time_fmt(value):
+    if value is None:
+        return "—"
+    return value.strftime("%H:%M")
 
 
 @app.template_filter("datetime_fmt")

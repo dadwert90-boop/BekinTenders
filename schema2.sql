@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS tenders (
     tender_category_id INTEGER REFERENCES tender_categories(tender_category_id),
     advertised_date DATE,
     closing_date DATE,
+    closing_time TIME,
     industry_id INTEGER REFERENCES industries(industry_id),
     requested_by_department_id INTEGER REFERENCES departments(department_id),
     tender_type_id INTEGER REFERENCES tender_types(tender_type_id),
@@ -52,6 +53,7 @@ CREATE TABLE IF NOT EXISTS tenders (
     attachment_download_url TEXT,
     created_time TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
+    status TEXT NOT NULL DEFAULT 'active',
     trial_data JSONB,
     tender_review_summary TEXT
 );
@@ -135,6 +137,7 @@ INSERT INTO tenders (
     tender_category_id,
     advertised_date,
     closing_date,
+    closing_time,
     industry_id,
     requested_by_department_id,
     tender_type_id,
@@ -148,6 +151,7 @@ INSERT INTO tenders (
     attachment_download_url,
     created_time,
     created_at,
+    status,
     trial_data,
     tender_review_summary
 )
@@ -167,6 +171,7 @@ SELECT
             THEN DATE '1899-12-30' + (regexp_replace(closing_date, '[^0-9\\.]', '', 'g')::FLOAT)::INT
         ELSE NULL
     END,
+    NULL,
     (SELECT industry_id FROM industries WHERE name = TRIM(stg.industry)),
     (SELECT department_id FROM departments WHERE name = TRIM(stg.tender_requested_by_dept)),
     (SELECT tender_type_id FROM tender_types WHERE code = TRIM(stg.tender_type)),
@@ -180,6 +185,7 @@ SELECT
     NULLIF(TRIM(attachment_download_url), ''),
     NULLIF(TRIM(created_time), '')::TIMESTAMPTZ,
     COALESCE(NULLIF(TRIM(created_at), '')::TIMESTAMPTZ, NOW()),
+    'active',
     CASE WHEN trial_data IS NULL OR TRIM(trial_data) = '' THEN NULL ELSE trial_data::JSONB END,
     NULLIF(TRIM(tender_review_summary), '')
 FROM staging_tenders stg
@@ -210,6 +216,7 @@ CREATE INDEX IF NOT EXISTS idx_tenders_advertised_date ON tenders(advertised_dat
 CREATE INDEX IF NOT EXISTS idx_tenders_closing_date ON tenders(closing_date);
 CREATE INDEX IF NOT EXISTS idx_tenders_industry ON tenders(industry_id);
 CREATE INDEX IF NOT EXISTS idx_tenders_province ON tenders(province_id);
+CREATE INDEX IF NOT EXISTS idx_tenders_status ON tenders(status);
 
 -- User and role management
 CREATE TABLE IF NOT EXISTS roles (

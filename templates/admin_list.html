@@ -58,6 +58,14 @@
         {% endfor %}
       </select>
     </label>
+    <label>
+      <span>Status</span>
+      <select name="status">
+        <option value="" {% if not status_filter %}selected{% endif %}>All Statuses</option>
+        <option value="active" {% if status_filter == "active" %}selected{% endif %}>Active</option>
+        <option value="inactive" {% if status_filter == "inactive" %}selected{% endif %}>Inactive</option>
+      </select>
+    </label>
     <div class="actions actions-inline">
       <button type="submit" class="search-cta">Search</button>
       <a class="ghost" href="{{ url_for('admin_index') }}">Reset</a>
@@ -79,6 +87,7 @@
         <div>Industry</div>
         <div>Province</div>
         <div>Type</div>
+        <div>Status</div>
         <div>Closing</div>
         <div class="tight">Actions</div>
       </div>
@@ -89,7 +98,8 @@
         <div>{{ t.industry or '—' }}</div>
         <div>{{ t.province or '—' }}</div>
         <div>{{ t.tender_type or '—' }}</div>
-        <div class="tight">{{ t.closing_date|date_fmt }}</div>
+        <div>{{ t.status|capitalize }}</div>
+        <div class="tight">{{ t.closing_date|date_fmt }} {{ t.closing_time|time_fmt if t.closing_time else '' }}</div>
         <div class="admin-actions tight">
           <a href="{{ url_for('admin_edit_tender', tender_id=t.tender_id) }}">Edit</a>
           <form action="{{ url_for('admin_delete_tender', tender_id=t.tender_id) }}" method="post" onsubmit="return confirm('Delete this tender?');">

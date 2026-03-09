@@ -69,6 +69,17 @@
         <input type="date" name="closing_date" value="{{ tender.closing_date }}">
       </label>
       <label>
+        <span>Closing time</span>
+        <input type="time" name="closing_time" value="{% if tender and tender.closing_time %}{{ tender.closing_time.strftime('%H:%M') }}{% endif %}">
+      </label>
+      <label>
+        <span>Status</span>
+        <select name="status">
+          <option value="active" {% if not tender or tender.status == "active" %}selected{% endif %}>Active</option>
+          <option value="inactive" {% if tender and tender.status == "inactive" %}selected{% endif %}>Inactive</option>
+        </select>
+      </label>
+      <label>
         <span>Attachment URL</span>
         <input type="url" name="attachment_download_url" value="{{ tender.attachment_download_url if tender else '' }}">
       </label>

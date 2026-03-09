@@ -91,7 +91,7 @@
         <div>{{ t.industry or '—' }}</div>
         <div>{{ t.province or '—' }}</div>
         <div>{{ t.tender_type or '—' }}</div>
-        <div class="tight">{{ t.closing_date|date_fmt }}</div>
+        <div class="tight">{{ t.closing_date|date_fmt }} {{ t.closing_time|time_fmt if t.closing_time else '' }}</div>
       </a>
       {% endfor %}
       {% if not tenders %}
