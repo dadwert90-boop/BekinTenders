@@ -23,7 +23,8 @@
   <div class="meta-card">
     <dl>
       <div><dt>Advertised</dt><dd>{{ tender.advertised_date|date_fmt }}</dd></div>
-      <div><dt>Closing</dt><dd>{{ tender.closing_date|date_fmt }} {{ tender.closing_time|time_fmt if tender.closing_time else '' }}</dd></div>
+      <div><dt>Closing date</dt><dd>{{ tender.closing_date|date_fmt }}</dd></div>
+      <div><dt>Closing time</dt><dd>{{ tender.closing_time|time_fmt }}</dd></div>
       <div><dt>Created</dt><dd>{{ tender.created_at|datetime_fmt }}</dd></div>
       <div><dt>ID</dt><dd class="tight">{{ tender.tender_id }}</dd></div>
     </dl>
