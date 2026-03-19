@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Admin · Send Tender{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <p class="admin-sidebar-title">Menu</p>
+    <a class="admin-side-link" href="{{ url_for('admin_index', run=1) }}">Tenders</a>
+    <a class="admin-side-link" href="{{ url_for('admin_users') }}">Users & Payments</a>
+    <a class="admin-side-link" href="{{ url_for('admin_emails') }}">Emails</a>
+    <a class="admin-side-link active" href="{{ url_for('admin_send_tender') }}">Send Tender</a>
+  </aside>
+  <div class="admin-main">
+    <div class="admin-header">
+      <h1>Admin · Send Tender Manually</h1>
+    </div>
+
+    <section class="filter-bar">
+      <form method="post" class="filters filters-inline">
+        <label>
+          <span>Billing month</span>
+          <input type="month" name="month" value="{{ month_value }}" required>
+        </label>
+        <label>
+          <span>Active tender</span>
+          <select name="tender_id" required>
+            <option value="">Select active tender</option>
+            {% for tender in active_tenders %}
+              <option value="{{ tender.tender_id }}" {% if selected_tender_id == tender.tender_id|string %}selected{% endif %}>
+                {{ tender.tender_ref }} · {{ tender.tender_description }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span>Paid user ({{ month_value }})</span>
+          <select name="user_id" required>
+            <option value="">Select paid user</option>
+            {% for user in paid_users %}
+              <option value="{{ user.user_id }}" {% if selected_user_id == user.user_id|string %}selected{% endif %}>
+                {{ user.full_name }} · {{ user.email }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <div class="actions actions-inline">
+          <button type="submit" class="search-cta">Queue Email</button>
+          <a class="ghost" href="{{ url_for('admin_send_tender') }}">Reset</a>
+        </div>
+      </form>
+    </section>
+
+    {% if status_message %}
+      <div class="alert {{ status_type }}">{{ status_message }}</div>
+    {% endif %}
+
+    <section class="results">
+      <div class="results-head">
+        <h2>Available recipients</h2>
+        <p>{{ paid_users|length }} paid users</p>
+      </div>
+      <div class="card table-card">
+        <div class="table">
+          <div class="table-row table-head users">
+            <div>Name</div>
+            <div>Email</div>
+            <div>Billing month</div>
+            <div>Status</div>
+            <div>Role</div>
+            <div class="tight">Info</div>
+            <div class="tight">Action</div>
+          </div>
+          {% for user in paid_users %}
+          <div class="table-row users">
+            <div class="wrap">{{ user.full_name }}</div>
+            <div class="wrap">{{ user.email }}</div>
+            <div class="tight">{{ month_value }}</div>
+            <div><span class="pill paid">Paid</span></div>
+            <div class="tight">Tender User</div>
+            <div class="tight">Eligible</div>
+            <div class="tight">Use dropdown</div>
+          </div>
+          {% endfor %}
+          {% if not paid_users %}
+            <div class="table-row empty">No paid users found for this month.</div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

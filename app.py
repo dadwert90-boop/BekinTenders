@@ -713,6 +713,17 @@ def _subscription_matches_tender(subscription: TenderSubscription, tender: Tende
     return bool(category_match or industry_match)
 
 
+def build_tender_email_payload(tender: Tender) -> Dict[str, Any]:
+    return {
+        "tender_ref": tender.tender_ref,
+        "tender_description": tender.tender_description,
+        "category": tender.category.name if tender.category else None,
+        "industry": tender.industry.name if tender.industry else None,
+        "province": tender.province.name if tender.province else None,
+        "closing_date": tender.closing_date.strftime("%Y-%m-%d") if tender.closing_date else "—",
+    }
+
+
 def enqueue_tender_alert_jobs(db: Session, tender: Tender) -> int:
     month_start = month_start_today()
     paid_user_ids = set(
@@ -751,15 +762,7 @@ def enqueue_tender_alert_jobs(db: Session, tender: Tender) -> int:
 
     users = db.scalars(select(User).where(User.user_id.in_(list(eligible_user_ids)))).all()
     queued = 0
-    closing_date = tender.closing_date.strftime("%Y-%m-%d") if tender.closing_date else "—"
-    payload = {
-        "tender_ref": tender.tender_ref,
-        "tender_description": tender.tender_description,
-        "category": tender.category.name if tender.category else None,
-        "industry": tender.industry.name if tender.industry else None,
-        "province": tender.province.name if tender.province else None,
-        "closing_date": closing_date,
-    }
+    payload = build_tender_email_payload(tender)
 
     for user in users:
         subscription = latest_subscription_by_user.get(user.user_id)
@@ -1715,6 +1718,147 @@ def admin_emails():
         year_value=year_value,
         month_options=month_options,
         year_options=year_options,
+    )
+
+
+@app.route("/admin/send-tender")
+@admin_required
+def admin_send_tender():
+    month_value = request.args.get("month")
+    month_start = parse_month(month_value) or month_start_today()
+    month_value = month_start.strftime("%Y-%m")
+    selected_tender_id = (request.args.get("tender_id") or "").strip()
+    selected_user_id = (request.args.get("user_id") or "").strip()
+    status_message = (request.args.get("message") or "").strip()
+    status_type = (request.args.get("tone") or "success").strip().lower()
+    if status_type not in {"success", "danger"}:
+        status_type = "success"
+
+    with get_session() as db:
+        sync_expired_tender_statuses(db)
+        active_tenders = (
+            db.scalars(
+                select(Tender)
+                .options(
+                    selectinload(Tender.industry),
+                    selectinload(Tender.tender_type),
+                    selectinload(Tender.province),
+                    selectinload(Tender.category),
+                )
+                .where(Tender.status == TENDER_STATUS_ACTIVE)
+                .order_by(Tender.created_at.desc())
+            )
+            .unique()
+            .all()
+        )
+        paid_users_rows = db.execute(
+            select(User.user_id, User.full_name, User.email)
+            .join(TenderSubscriptionPayment, TenderSubscriptionPayment.user_id == User.user_id)
+            .join(UserRole, UserRole.user_id == User.user_id)
+            .join(Role, Role.role_id == UserRole.role_id)
+            .where(TenderSubscriptionPayment.month_start == month_start)
+            .where(TenderSubscriptionPayment.paid.is_(True))
+            .where(Role.name == "Tender User")
+            .group_by(User.user_id, User.full_name, User.email)
+            .order_by(func.coalesce(User.full_name, User.email), User.email)
+        ).all()
+
+    paid_users = [
+        {"user_id": row.user_id, "full_name": row.full_name or "—", "email": row.email}
+        for row in paid_users_rows
+    ]
+
+    return render_template(
+        "admin_send_tender.html",
+        month_value=month_value,
+        active_tenders=active_tenders,
+        paid_users=paid_users,
+        selected_tender_id=selected_tender_id,
+        selected_user_id=selected_user_id,
+        status_message=status_message,
+        status_type=status_type,
+    )
+
+
+@app.route("/admin/send-tender", methods=["POST"])
+@admin_required
+def admin_send_tender_submit():
+    month_value = request.form.get("month")
+    month_start = parse_month(month_value) or month_start_today()
+    month_value = month_start.strftime("%Y-%m")
+    tender_id_value = (request.form.get("tender_id") or "").strip()
+    user_id_value = (request.form.get("user_id") or "").strip()
+
+    message = "Tender email queued."
+    tone = "success"
+    selected_tender_id = tender_id_value
+    selected_user_id = user_id_value
+    try:
+        tender_uuid = uuid.UUID(tender_id_value)
+    except ValueError:
+        tender_uuid = None
+    user_id = parse_int(user_id_value)
+
+    with get_session() as db:
+        if tender_uuid is None:
+            message = "Please select a valid active tender."
+            tone = "danger"
+        elif user_id is None:
+            message = "Please select a valid paid user."
+            tone = "danger"
+        else:
+            sync_expired_tender_statuses(db)
+            tender = db.scalars(
+                select(Tender)
+                .options(
+                    selectinload(Tender.industry),
+                    selectinload(Tender.tender_type),
+                    selectinload(Tender.province),
+                    selectinload(Tender.category),
+                )
+                .where(Tender.tender_id == tender_uuid)
+                .where(Tender.status == TENDER_STATUS_ACTIVE)
+            ).one_or_none()
+            paid_user_exists = db.scalar(
+                select(func.count())
+                .select_from(User)
+                .join(TenderSubscriptionPayment, TenderSubscriptionPayment.user_id == User.user_id)
+                .join(UserRole, UserRole.user_id == User.user_id)
+                .join(Role, Role.role_id == UserRole.role_id)
+                .where(User.user_id == user_id)
+                .where(TenderSubscriptionPayment.month_start == month_start)
+                .where(TenderSubscriptionPayment.paid.is_(True))
+                .where(Role.name == "Tender User")
+            )
+            user = db.get(User, user_id) if paid_user_exists else None
+            if tender is None:
+                message = "Tender must be active to send manually."
+                tone = "danger"
+            elif user is None:
+                message = "User must be paid for the selected month."
+                tone = "danger"
+            else:
+                db.add(
+                    EmailJob(
+                        tender_id=tender.tender_id,
+                        recipient_email=user.email,
+                        payload=build_tender_email_payload(tender),
+                        status="pending",
+                        attempts=0,
+                        max_attempts=5,
+                    )
+                )
+                db.commit()
+
+    return redirect(
+        url_for(
+            "admin_send_tender",
+            month=month_value,
+            tender_id=selected_tender_id,
+            user_id=selected_user_id,
+            tone=tone,
+            message=message,
+        )
     )
 
 
