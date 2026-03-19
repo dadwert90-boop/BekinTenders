@@ -1204,6 +1204,14 @@ def month_start_today() -> datetime.date:
     return datetime.date(today.year, today.month, 1)
 
 
+def normalize_sort_datetime(value: Optional[datetime.datetime]) -> datetime.datetime:
+    if not isinstance(value, datetime.datetime):
+        return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value
+
+
 def _parse_month_value(value: Optional[str]) -> Optional[int]:
     month = parse_int(value)
     if month is None or month < 1 or month > 12:
@@ -1487,7 +1495,7 @@ def admin_users():
                 }
             )
 
-    rows.sort(key=lambda item: item.get("paid_at") or datetime.datetime.min, reverse=True)
+    rows.sort(key=lambda item: normalize_sort_datetime(item.get("paid_at")), reverse=True)
     paid_count = sum(1 for row in rows if row.get("is_paid"))
 
     return render_template(
