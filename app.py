@@ -703,6 +703,91 @@ def fetch_user_roles(db: Session, user_id: int) -> List[str]:
     return [row[0] for row in db.execute(stmt).all()]
 
 
+def _subscription_matches_tender(subscription: TenderSubscription, tender: Tender) -> bool:
+    category_ids = set(subscription.selected_category_ids or [])
+    industry_ids = set(subscription.selected_industry_ids or [])
+    if not category_ids and not industry_ids:
+        return False
+    category_match = tender.tender_category_id is not None and tender.tender_category_id in category_ids
+    industry_match = tender.industry_id is not None and tender.industry_id in industry_ids
+    return bool(category_match or industry_match)
+
+
+def enqueue_tender_alert_jobs(db: Session, tender: Tender) -> int:
+    month_start = month_start_today()
+    paid_user_ids = set(
+        db.scalars(
+            select(TenderSubscriptionPayment.user_id).where(
+                TenderSubscriptionPayment.month_start == month_start,
+                TenderSubscriptionPayment.paid.is_(True),
+            )
+        ).all()
+    )
+    if not paid_user_ids:
+        return 0
+
+    subscriptions = db.scalars(
+        select(TenderSubscription)
+        .where(TenderSubscription.user_id.in_(paid_user_ids))
+        .order_by(TenderSubscription.user_id.asc(), TenderSubscription.created_at.desc())
+    ).all()
+
+    latest_subscription_by_user: Dict[int, TenderSubscription] = {}
+    for subscription in subscriptions:
+        if subscription.user_id not in latest_subscription_by_user:
+            latest_subscription_by_user[subscription.user_id] = subscription
+
+    eligible_user_ids = set(
+        db.scalars(
+            select(User.user_id)
+            .join(UserRole, UserRole.user_id == User.user_id)
+            .join(Role, Role.role_id == UserRole.role_id)
+            .where(User.user_id.in_(list(latest_subscription_by_user.keys())))
+            .where(Role.name == "Tender User")
+        ).all()
+    )
+    if not eligible_user_ids:
+        return 0
+
+    users = db.scalars(select(User).where(User.user_id.in_(list(eligible_user_ids)))).all()
+    queued = 0
+    closing_date = tender.closing_date.strftime("%Y-%m-%d") if tender.closing_date else "—"
+    payload = {
+        "tender_ref": tender.tender_ref,
+        "tender_description": tender.tender_description,
+        "category": tender.category.name if tender.category else None,
+        "industry": tender.industry.name if tender.industry else None,
+        "province": tender.province.name if tender.province else None,
+        "closing_date": closing_date,
+    }
+
+    for user in users:
+        subscription = latest_subscription_by_user.get(user.user_id)
+        if not subscription or not _subscription_matches_tender(subscription, tender):
+            continue
+        existing_job = db.scalars(
+            select(EmailJob)
+            .where(EmailJob.tender_id == tender.tender_id)
+            .where(func.lower(EmailJob.recipient_email) == user.email.lower())
+            .limit(1)
+        ).first()
+        if existing_job:
+            continue
+        db.add(
+            EmailJob(
+                tender_id=tender.tender_id,
+                recipient_email=user.email,
+                payload=payload,
+                status="pending",
+                attempts=0,
+                max_attempts=5,
+            )
+        )
+        queued += 1
+    db.flush()
+    return queued
+
+
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -1802,6 +1887,10 @@ def admin_new_tender():
             if new_industry:
                 form["industry"] = str(ensure_industry(db, new_industry))
             tid = upsert_tender(db, None, form)
+            tender = fetch_tender_detail(db, tid)
+            if tender:
+                queued_count = enqueue_tender_alert_jobs(db, tender)
+                app.logger.info("Queued %s tender email jobs for tender %s", queued_count, tid)
             db.commit()
         return redirect(url_for("admin_index", run=1))
 
